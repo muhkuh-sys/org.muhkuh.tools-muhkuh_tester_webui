@@ -214,7 +214,7 @@ local function apply_parameters(atModules, tTestDescription, ulSerial)
       tLogSystem.debug('Skipping deactivated test %02d:%s .', uiTestIndex, strTestCaseName)
     else
       -- Get the parameters for the module.
-      local atParametersModule = tModule.atParameter
+      local atParametersModule = tModule.atParameter or {}
 
       -- Get the parameters from the XML.
       local atParametersXml = tTestDescription:getTestCaseParameters(uiTestIndex)
