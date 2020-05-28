@@ -338,7 +338,7 @@ local function run_action(strAction)
             -- Run the LUA chunk.
             local fStatus, tResult = xpcall(tChunk, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
             if fStatus==true then
-              tActionResult = true
+              tActionResult = tResult
             else
               if tResult~=nil then
                 strMessage = tostring(tResult)
