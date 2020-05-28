@@ -96,6 +96,7 @@ tArcList0.AddFiles('',
     'local/test_system.lua')
 
 tArcList0.AddFiles('jsx/',
+    'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
     'local/jsx/test_failed.jsx')
 

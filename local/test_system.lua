@@ -537,6 +537,24 @@ end
 
 
 
+local function __updateTestStati(abActiveTests)
+  local astrStati = {}
+  local astrStatiQuoted = {}
+
+  for _, fIsEnabled in ipairs(abActiveTests) do
+    local strState = 'idle'
+    if fIsEnabled==false then
+      strState = 'disabled'
+    end
+    table.insert(astrStati, strState)
+    table.insert(astrStatiQuoted, string.format('"%s"', strState))
+  end
+
+  return astrStati, astrStatiQuoted
+end
+
+
+
 -- Read the test.xml file.
 local tTestDescription = TestDescription(tLogSystem)
 local tResult = tTestDescription:parse('tests.xml')
@@ -571,21 +589,49 @@ else
     tLogSystem.info('Running over the serials [%d,%d] .', ulSerialFirst, ulSerialLast)
 
     -- Build the initial test states.
-    local astrStati = {}
-    for _, fIsEnabled in ipairs(tJson.activeTests) do
-      local strState = 'idle'
-      if fIsEnabled==false then
-        strState = 'disabled'
-      end
-      table.insert(astrStati, strState)
-    end
+    local astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
 
     -- Set the serial numbers.
     sendSerials(ulSerialFirst, ulSerialLast)
     sendTestNames(tTestDescription:getTestNames())
     sendTestStati(astrStati)
 
-    for ulSerialCurrent = ulSerialFirst, ulSerialLast do
+    -- Do not show the serial selector for the first board.
+    local fThisIsTheFirstBoard = true
+
+    ulSerialCurrent = ulSerialFirst
+    repeat
+      if fThisIsTheFirstBoard~=true then
+        -- Reset all tests which are not deactivated to 'idle'.
+        astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
+        sendTestStati(astrStati)
+
+        -- Show the next serial to test even if it might be changed. This is a good memory hook.
+        sendCurrentSerial(ulSerialCurrent)
+
+        -- Read the serial selector interaction code.
+        tResult = tester:setInteractionGetJson('jsx/select_next_serial_and_tests.jsx', {
+          ['TEST_NAMES'] = strTestNames,
+          ['TEST_STATI'] = table.concat(astrStatiQuoted, ', '),
+          ['SERIAL_FIRST'] = ulSerialFirst,
+          ['SERIAL_CURRENT'] = ulSerialCurrent,
+          ['SERIAL_LAST'] = ulSerialLast
+        })
+        if tResult==nil then
+          tLogSystem.fatal('Failed to read interaction.')
+          break
+        end
+        local tJson = tResult
+        pl.pretty.dump(tJson)
+        tester:clearInteraction()
+        -- Update the active boards.
+        m_atSystemParameter.activeTests = tJson.activeTests
+        -- Get the next serial number to test.
+        ulSerialCurrent = tonumber(tJson.serialNext)
+        astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
+        sendTestStati(astrStati)
+      end
+
       tLogSystem.info('Testing serial %d .', ulSerialCurrent)
       m_atSystemParameter.serial = ulSerialCurrent
       sendCurrentSerial(ulSerialCurrent)
@@ -611,7 +657,14 @@ else
           end
         end
       end
-    end
+
+      -- Show the serial selector before the next test run.
+      fThisIsTheFirstBoard = false
+
+      -- Move to the next board.
+      ulSerialCurrent = ulSerialCurrent + 1
+
+    until ulSerialCurrent>ulSerialLast
   end
 end
 
