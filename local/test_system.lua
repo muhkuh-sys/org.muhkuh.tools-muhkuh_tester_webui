@@ -476,7 +476,7 @@ local function run_tests(atModules, tTestDescription)
     -- Run a post action if present.
     local strAction = tTestDescription:getPost()
     fStatus, tResult = run_action(strAction)
-    if fTestResult~=true then
+    if fStatus~=true then
       local strError
       if tResult~=nil then
         strError = tostring(tResult)
@@ -484,6 +484,8 @@ local function run_tests(atModules, tTestDescription)
         strError = 'No error message.'
       end
       tLogSystem.error('Error running the global post action: %s', strError)
+      -- The test failed if the post action failed.
+      fTestResult = false
     end
 
     -- Print the result in huge letters.
