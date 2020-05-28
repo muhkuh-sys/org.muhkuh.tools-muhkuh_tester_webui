@@ -661,9 +661,27 @@ else
       -- Show the serial selector before the next test run.
       fThisIsTheFirstBoard = false
 
-      -- Move to the next board.
-      ulSerialCurrent = ulSerialCurrent + 1
-
+      -- Show a finish message if this is the last board.
+      if ulSerialCurrent==ulSerialLast then
+        tResult = tester:setInteractionGetJson('jsx/test_last_board.jsx')
+        if tResult==nil then
+          tLogSystem.fatal('Failed to read interaction.')
+          break
+        end
+        local tJson = tResult
+        pl.pretty.dump(tJson)
+        tester:clearInteraction()
+        if tJson.button=='back' then
+          -- The user does not want to quit.
+          -- Keep the serial at the same number and go on.
+        else
+          -- The user agreed to quit.
+          ulSerialCurrent = ulSerialCurrent + 1
+        end
+      else
+        -- Move to the next board.
+        ulSerialCurrent = ulSerialCurrent + 1
+      end
     until ulSerialCurrent>ulSerialLast
   end
 end

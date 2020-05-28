@@ -98,7 +98,8 @@ tArcList0.AddFiles('',
 tArcList0.AddFiles('jsx/',
     'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
-    'local/jsx/test_failed.jsx')
+    'local/jsx/test_failed.jsx',
+    'local/jsx/test_last_board.jsx')
 
 tArcList0.AddFiles('wrapper/linux/',
     'local/wrapper/linux/tester')
