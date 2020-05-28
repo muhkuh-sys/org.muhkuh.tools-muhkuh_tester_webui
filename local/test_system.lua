@@ -509,18 +509,6 @@ local function run_tests(atModules, tTestDescription)
       tLogSystem.info('*          #######  ##    ##          *')
       tLogSystem.info('*                                     *')
       tLogSystem.info('***************************************')
-
-      local tResult = tester:setInteractionGetJson('jsx/test_ok.jsx', {})
-      if tResult==nil then
-        tLogSystem.fatal('Failed to read interaction.')
-      else
-        local tJson = tResult
-        tester:clearInteraction()
-
-        if tJson.button=='cancel' then
-          fTestIsNotCanceled = false
-        end
-      end
     else
       tLogSystem.error('*******************************************************')
       tLogSystem.error('*                                                     *')
