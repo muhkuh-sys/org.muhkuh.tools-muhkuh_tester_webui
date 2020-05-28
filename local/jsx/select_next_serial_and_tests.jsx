@@ -85,6 +85,11 @@ class Interaction extends React.Component {
   render() {
     return (
       <Paper style={{padding: '1em'}}>
+        <div style={{width: '100%'}}>
+          <Typography align="center" variant="h1" gutterBottom>Wähle die nächste Seriennummer aus</Typography>
+          <Typography align="center" variant="subtitle1" gutterBottom>Oder klicke auf "Start testing", um mit der Seriennummer {this.state.serial_current} weiterzumachen.</Typography>
+        </div>
+
         <div style={{display: 'block', margin: '1em'}}>
           <TextField
             id="serial_current"
