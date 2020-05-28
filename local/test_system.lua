@@ -424,6 +424,8 @@ local function run_tests(atModules, tTestDescription)
               fStatus, tResult = run_action(strAction)
             end
           end
+          -- Run a complete garbare collection after the test case.
+          collectgarbage()
 
           -- Send the result to the GUI.
           local strTestState = 'error'
