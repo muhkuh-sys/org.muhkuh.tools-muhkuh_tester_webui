@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="mbs/setup2html.xsl"?>
 
-<muhkuh_buildsystem project="org.muhkuh.tools-muhkuh_tester_webui">
+<muhkuh_buildsystem group="org.muhkuh.tools" module="muhkuh_tester_webui">
 	<project_version>0.0.2</project_version>
 
 	<scons>

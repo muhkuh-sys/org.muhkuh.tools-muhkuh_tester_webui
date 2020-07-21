@@ -73,8 +73,8 @@ aAttribs.update(dict({
 #
 # Build the artifacts.
 #
-strGroup = 'org.muhkuh.tools'
-strModule = 'muhkuh_tester_webui'
+strGroup = PROJECT_GROUP
+strModule = PROJECT_MODULE
 
 # Split the group by dots.
 aGroup = strGroup.split('.')
