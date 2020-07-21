@@ -165,7 +165,7 @@ local function collect_testcases(tTestDescription, aActiveTests)
   -- Get the number of tests from the test description.
   local uiNumberOfTests = tTestDescription:getNumberOfTests()
   -- Get the number of tests specified in the GUI response.
-  local uiTestsFromGui = table.maxn(aActiveTests)
+  local uiTestsFromGui = #aActiveTests
   -- Both test counts must match or there is something wrong.
   if uiNumberOfTests~=uiTestsFromGui then
     tLogSystem.error('The test description specifies %d tests, but the selection covers %d tests.', uiNumberOfTests, uiTestsFromGui)
