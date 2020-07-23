@@ -478,6 +478,10 @@ local function run_tests(atModules, tTestDescription)
     -- Close the connection to the netX.
     tester:closeCommonPlugin()
 
+    -- HACK: the post action needs to know if the board should be finalized or
+    --       trashed. Just add a global which can be used in the post action.
+    _G.__MUHKUH_WEBUI_TESTRESULT = fTestResult
+
     -- Run a post action if present.
     local strAction = tTestDescription:getPost()
     fStatus, tResult = run_action(strAction)
