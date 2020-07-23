@@ -331,7 +331,12 @@ local function run_action(strAction)
           strMessage = string.format('Failed to read the action file "%s": %s', strAction, strMsg)
         else
           -- Parse the LUA source.
-          local tChunk, strMsg = loadstring(strLuaSrc, strAction)
+          local tChunk, strMsg
+          if loadstring~=nil then
+            tChunk, strMsg = loadstring(strLuaSrc, strAction)
+          else
+            tChunk, strMsg = load(strLuaSrc, strAction)
+          end
           if tChunk==nil then
             strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strMsg)
           else
