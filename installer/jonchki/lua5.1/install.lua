@@ -219,6 +219,7 @@ function tPostTriggerAction:run(tInstallHelper)
                 else
                   -- Parse the install script.
                   local strInstallScript = tFileResult
+                  local loadstring = loadstring or load
                   tResult, strError = loadstring(strInstallScript, strInstallScriptPath)
                   if tResult==nil then
                     tResult = nil
