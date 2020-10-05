@@ -4,73 +4,93 @@ io.stderr:setvbuf('no')
 
 require 'muhkuh_cli_init'
 
-local pl = require'pl.import_into'()
-local json = require 'dkjson'
-local zmq = require 'lzmq'
-local TestDescription = require 'test_description'
 
--- Register the tester as a global module.
-local cTester = require 'tester_webgui'
-_G.tester = cTester()
+local class = require 'pl.class'
+local TestSystem = class()
 
-local usServerPort = tonumber(arg[1])
+function TestSystem:_init(usServerPort)
+  self.pl = require'pl.import_into'()
+  self.json = require 'dkjson'
+  self.zmq = require 'lzmq'
+  self.TestDescription = require 'test_description'
 
-local m_zmqPort = usServerPort
-strAddress = string.format('tcp://127.0.0.1:%d', usServerPort)
-print(string.format("Connecting to %s", strAddress))
+  -- Register the tester as a global module.
+  local cTester = require 'tester_webgui'
+  _G.tester = cTester()
 
--- Create the 0MQ context.
-local zmq = require 'lzmq'
-local tZContext, strError = zmq.context()
-if tZContext==nil then
-  error('Failed to create ZMQ context: ' .. tostring(strError))
-end
-local m_zmqContext = tZContext
-
--- Create the socket.
-local tZSocket, strError = tZContext:socket(zmq.PAIR)
-if tZSocket==nil then
-  error('Failed to create ZMQ socket: ' .. tostring(strError))
+  self.m_zmqPort = usServerPort
+  self.m_zmqContext = nil
+  self.m_zmqSocket = nil
+  self.m_atSystemParameter = nil
 end
 
--- Connect the socket to the server.
-local tResult, strError = tZSocket:connect(strAddress)
-if tResult==nil then
-  error('Failed to connect the socket: ' .. tostring(strError))
+
+
+function TestSystem:connect()
+  local usServerPort = self.m_zmqPort
+  local strAddress = string.format('tcp://127.0.0.1:%d', usServerPort)
+  print(string.format("Connecting to %s", strAddress))
+
+  -- Create the 0MQ context.
+  local zmq = self.zmq
+  local tZContext, strErrorCtx = zmq.context()
+  if tZContext==nil then
+    error('Failed to create ZMQ context: ' .. tostring(strErrorCtx))
+  end
+  self.m_zmqContext = tZContext
+
+  -- Create the socket.
+  local tZSocket, strErrorSocket = tZContext:socket(zmq.PAIR)
+  if tZSocket==nil then
+    error('Failed to create ZMQ socket: ' .. tostring(strErrorSocket))
+  end
+
+  -- Connect the socket to the server.
+  local tResult, strErrorConnect = tZSocket:connect(strAddress)
+  if tResult==nil then
+    error('Failed to connect the socket: ' .. tostring(strErrorConnect))
+  end
+  self.m_zmqSocket = tZSocket
+  _G.tester:setSocket(tZSocket)
+
+  print(string.format('0MQ socket connected to tcp://127.0.0.1:%d', usServerPort))
 end
-local m_zmqSocket = tZSocket
-tester:setSocket(m_zmqSocket)
 
-print(string.format('0MQ socket connected to tcp://127.0.0.1:%d', usServerPort))
 
-local m_atSystemParameter = nil
+
+function TestSystem:createLogger()
+  local m_zmqSocket = self.m_zmqSocket
+
+  ------------------------------------------------------------------------------
+  -- Now create the logger. It sends the data to the ZMQ socket.
+  -- It does not use the formatter function 'fmt' or the date 'now'. This is
+  -- done at the server side.
+  local tLogWriterFn = function(fmt, msg, lvl, now)
+    m_zmqSocket:send(string.format('LOG%d,%s', lvl, msg))
+  end
+  self.tLogWriterFn = tLogWriterFn
+
+  -- This is the default log level. Note that the filtering should happen in
+  -- the GUI and all messages which are already filtered with this level here
+  -- will never be available in the GUI.
+  local strLogLevel = 'debug'
+  self.strLogLevel = strLogLevel
+
+  -- Create a new log target with "SYSTEM" prefix.
+  local tLogWriterSystem = require 'log.writer.prefix'.new('[System] ', tLogWriterFn)
+  local tLogSystem = require "log".new(
+    strLogLevel,
+    tLogWriterSystem,
+    require "log.formatter.format".new()
+  )
+  _G.tester:setLog(tLogSystem)
+  self.tLogSystem = tLogSystem
+end
 
 
 ------------------------------------------------------------------------------
--- Now create the logger. It sends the data to the ZMQ socket.
--- It does not use the formatter function 'fmt' or the date 'now'. This is
--- done at the server side.
-local tLogWriterFn = function(fmt, msg, lvl, now)
-  m_zmqSocket:send(string.format('LOG%d,%s', lvl, msg))
-end
 
--- This is the default log level. Note that the filtering should happen in
--- the GUI and all messages which are already filtered with this level here
--- will never be available in the GUI.
-local strLogLevel = 'debug'
-
--- Create a new log target with "SYSTEM" prefix.
-local tLogWriterSystem = require 'log.writer.prefix'.new('[System] ', tLogWriterFn)
-local tLogSystem = require "log".new(
-  strLogLevel,
-  tLogWriterSystem,
-  require "log.formatter.format".new()
-)
-tester:setLog(tLogSystem)
-
-------------------------------------------------------------------------------
-
-local function sendTitles(strTitle, strSubtitle)
+function TestSystem:sendTitles(strTitle, strSubtitle)
   if strTitle==nil then
     strTitle = 'No title'
   else
@@ -86,80 +106,83 @@ local function sendTitles(strTitle, strSubtitle)
     title=strTitle,
     subtitle=strSubtitle
   }
-  local strJson = json.encode(tData)
-  m_zmqSocket:send('TTL'..strJson)
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('TTL'..strJson)
 end
 
 
 
-local function sendSerials(ulSerialFirst, ulSerialLast)
+function TestSystem:sendSerials(ulSerialFirst, ulSerialLast)
   local tData = {
     hasSerial=true,
     firstSerial=ulSerialFirst,
     lastSerial=ulSerialLast
   }
-  local strJson = json.encode(tData)
-  m_zmqSocket:send('SER'..strJson)
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('SER'..strJson)
 end
 
 
 
-local function sendTestNames(astrTestNames)
-  local strJson = json.encode(astrTestNames)
-  m_zmqSocket:send('NAM'..strJson)
+function TestSystem:sendTestNames(astrTestNames)
+  local strJson = self.json.encode(astrTestNames)
+  self.m_zmqSocket:send('NAM'..strJson)
 end
 
 
 
-local function sendTestStati(astrTestStati)
-  local strJson = json.encode(astrTestStati)
-  m_zmqSocket:send('STA'..strJson)
+function TestSystem:sendTestStati(astrTestStati)
+  local strJson = self.json.encode(astrTestStati)
+  self.m_zmqSocket:send('STA'..strJson)
 end
 
 
 
-local function sendCurrentSerial(uiCurrentSerial)
+function TestSystem:sendCurrentSerial(uiCurrentSerial)
   local tData = {
     currentSerial=uiCurrentSerial
   }
-  local strJson = json.encode(tData)
-  m_zmqSocket:send('CUR'..strJson)
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('CUR'..strJson)
 end
 
 
 
-local function sendRunningTest(uiRunningTest)
+function TestSystem:sendRunningTest(uiRunningTest)
   local tData = {
     runningTest=uiRunningTest
   }
-  local strJson = json.encode(tData)
-  m_zmqSocket:send('RUN'..strJson)
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('RUN'..strJson)
 end
 
 
 
-local function sendTestState(strTestState)
+function TestSystem:sendTestState(strTestState)
   local tData = {
     testState=strTestState
   }
-  local strJson = json.encode(tData)
-  m_zmqSocket:send('RES'..strJson)
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('RES'..strJson)
 end
 
 
 
-local function load_test_module(uiTestIndex)
+function TestSystem:load_test_module(uiTestIndex)
+  local tLogSystem = self.tLogSystem
+
   local strModuleName = string.format("test%02d", uiTestIndex)
   tLogSystem.debug('Reading module for test %d from %s .', uiTestIndex, strModuleName)
 
   local tClass = require(strModuleName)
-  local tModule = tClass(uiTestIndex, tLogWriterFn, strLogLevel)
+  local tModule = tClass(uiTestIndex, self.tLogWriterFn, self.strLogLevel)
   return tModule
 end
 
 
 
-local function collect_testcases(tTestDescription, aActiveTests)
+function TestSystem:collect_testcases(tTestDescription, aActiveTests)
+  local tLogSystem = self.tLogSystem
   local tResult
 
   -- Get the number of tests from the test description.
@@ -177,12 +200,24 @@ local function collect_testcases(tTestDescription, aActiveTests)
       local strTestName = astrTestNames[uiTestIndex]
       -- Only process test cases which are active.
       if fTestCaseIsActive==true then
-        local fOk, tValue = pcall(load_test_module, uiTestIndex)
+        local fOk, tValue = pcall(self.load_test_module, self, uiTestIndex)
         if fOk~=true then
           tLogSystem.error('Failed to load the module for test case %d: %s', uiTestIndex, tostring(tValue))
           fAllModulesOk = false
         else
-          aModules[uiTestIndex] = tValue
+          local tModule = tValue
+
+          -- The ID defined in the class must match the ID from the test description.
+          local strDefinitionId = tTestDescription:getTestCaseName(uiTestIndex)
+          local strModuleId = tModule.CFG_strTestName
+          if strModuleId~=strDefinitionId then
+            tLogSystem.fatal('The ID of test %d differs between the test definition and the module.', uiTestIndex)
+            tLogSystem.debug('The ID of test %d in the test definition is "%s".', uiTestIndex, strDefinitionId)
+            tLogSystem.debug('The ID of test %d in the module is "%s".', uiTestIndex, strModuleId)
+            fAllModulesOk = false
+          else
+            aModules[uiTestIndex] = tModule
+          end
         end
       else
         tLogSystem.debug('Skipping deactivated test %02d:%s .', uiTestIndex, strTestName)
@@ -199,7 +234,8 @@ end
 
 
 
-local function apply_parameters(atModules, tTestDescription, ulSerial)
+function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
+  local tLogSystem = self.tLogSystem
   local tResult = true
 
   local astrTestNames = tTestDescription:getTestNames()
@@ -229,31 +265,65 @@ local function apply_parameters(atModules, tTestDescription, ulSerial)
           tLogSystem.fatal('The parameter "%s" does not exist in test case %d (%s).', strParameterName, uiTestIndex, strTestCaseName)
           tResult = nil
           break
+        -- Is the parameter an "output"?
+        elseif tParameter.fIsOutput==true then
+          self.tLogSystem.fatal('The parameter "%s" in test case %d (%s) is an output.', strParameterName, uiTestIndex, strTestCaseName)
+          tResult = nil
+          break
         else
           if strParameterValue~=nil then
             -- This is a direct assignment of a value.
             tParameter:set(strParameterValue)
           elseif strParameterConnection~=nil then
-            -- This is a connection to another value.
+            -- This is a connection to another value or an output parameter.
             local strClass, strName = string.match(strParameterConnection, '^([^:]+):(.+)')
             if strClass==nil then
               tLogSystem.fatal('Parameter "%s" of test %d has an invalid connection "%s".', strParameterName, uiTestIndex, strParameterConnection)
               tResult = nil
               break
             else
-              -- For now accept only system values.
-              if strClass~='system' then
-                tLogSystem.fatal('The connection target "%s" has an unknown class.', strParameterConnection)
-                tResult = nil
-                break
-              else
-                tValue = m_atSystemParameter[strName]
+              -- Is this a connection to a system parameter?
+              if strClass=='system' then
+                local tValue = self.m_atSystemParameter[strName]
                 if tValue==nil then
                   tLogSystem.fatal('The connection target "%s" has an unknown name.', strParameterConnection)
                   tResult = nil
                   break
                 else
                   tParameter:set(tostring(tValue))
+                end
+              else
+                -- This is not a system parameter.
+                -- Try to interpret the class as a test number.
+                local uiConnectionTargetTestCase = tonumber(strClass)
+                if uiConnectionTargetTestCase==nil then
+                  -- The class is no number. Search the name.
+                  uiConnectionTargetTestCase = tTestDescription:getTestCaseIndex(strClass)
+                  if uiConnectionTargetTestCase==nil then
+                    tLogSystem.fatal('The connection "%s" uses an unknown test name: "%s".', strParameterConnection, strClass)
+                    tResult = nil
+                    break
+                  end
+                end
+                if uiConnectionTargetTestCase~=nil then
+                  -- Get the target module.
+                  local tTargetModule = atModules[uiConnectionTargetTestCase]
+                  if tTargetModule==nil then
+                    tLogSystem.info('Ignoring the connection "%s" to an inactive target: "%s".', strParameterConnection, strClass)
+                  else
+                    -- Get the parameter list of the target module.
+                    local atTargetParameters = tTargetModule.atParameter or {}
+                    -- Does the target module have a matching parameter?
+                    local tTargetParameter = atTargetParameters[strName]
+                    if tTargetParameter==nil then
+                      tLogSystem.fatal('The connection "%s" uses a non-existing parameter at the target: "%s".', strParameterConnection, strName)
+                      tResult = nil
+                      break
+                    else
+                      self.tLogSystem.info('Connecting %02d:%s to %02d:%s .', uiTestIndex, strParameterName, uiConnectionTargetTestCase, tTargetParameter.strName)
+                      tParameter:connect(tTargetParameter)
+                    end
+                  end
                 end
               end
             end
@@ -268,7 +338,8 @@ end
 
 
 
-local function check_parameters(atModules, tTestDescription)
+function TestSystem:check_parameters(atModules, tTestDescription)
+  local tLogSystem = self.tLogSystem
   -- Check all parameters.
   local fParametersOk = true
 
@@ -281,11 +352,21 @@ local function check_parameters(atModules, tTestDescription)
       tLogSystem.debug('Skipping deactivated test %02d:%s .', uiTestIndex, strTestCaseName)
     else
       for _, tParameter in ipairs(tModule.CFG_aParameterDefinitions) do
-        -- Validate the parameter.
-        local fValid, strError = tParameter:validate()
-        if fValid==false then
-          tLogSystem.fatal('The parameter %02d:%s is invalid: %s', uiTestIndex, tParameter.strName, strError)
-          fParametersOk = nil
+        -- Ignore output parameter. They will be set when the test is executed.
+        if tParameter.fIsOutput==true then
+          self.tLogSystem.debug('Ignoring output parameter %02d:%s .', uiTestIndex, tParameter.strName)
+
+        -- Ignore also parameters connected to something. They might get their values when the test is executed.
+        elseif tParameter:isConnected()==true then
+          self.tLogSystem.debug('Ignoring the connected parameter %02d:%s .', uiTestIndex, tParameter.strName)
+
+        else
+          -- Validate the parameter.
+          local fValid, strError = tParameter:validate()
+          if fValid==false then
+            tLogSystem.fatal('The parameter %02d:%s is invalid: %s', uiTestIndex, tParameter.strName, strError)
+            fParametersOk = nil
+          end
         end
       end
     end
@@ -300,7 +381,9 @@ end
 
 
 
-local function run_action(strAction)
+function TestSystem:run_action(strAction)
+  local pl = self.pl
+  local tLogSystem = self.tLogSystem
   local tActionResult = nil
   local strMessage = nil
 
@@ -312,7 +395,7 @@ local function run_action(strAction)
 
     -- If the action is a JSX file, this is a static GUI element.
     if strExt=='.jsx' then
-      tResult = tester:setInteraction(strAction)
+      local tResult = _G.tester:setInteraction(strAction)
       if tResult==nil then
         strMessage = 'Failed to load the JSX.'
       else
@@ -331,12 +414,8 @@ local function run_action(strAction)
           strMessage = string.format('Failed to read the action file "%s": %s', strAction, strMsg)
         else
           -- Parse the LUA source.
-          local tChunk, strMsg
-          if loadstring~=nil then
-            tChunk, strMsg = loadstring(strLuaSrc, strAction)
-          else
-            tChunk, strMsg = load(strLuaSrc, strAction)
-          end
+          local _loadstring = loadstring or load
+          local tChunk, strMsg = _loadstring(strLuaSrc, strAction)
           if tChunk==nil then
             strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strMsg)
           else
@@ -364,13 +443,15 @@ end
 
 
 
-local function run_tests(atModules, tTestDescription)
+function TestSystem:run_tests(atModules, tTestDescription)
+  local pl = self.pl
+  local tLogSystem = self.tLogSystem
   -- Run all enabled modules with their parameter.
   local fTestIsNotCanceled = true
 
   -- Run a pre action if present.
   local strAction = tTestDescription:getPre()
-  local fTestResult, tResult = run_action(strAction)
+  local fTestResult, tResult = self:run_action(strAction)
   if fTestResult~=true then
     local strError
     if tResult~=nil then
@@ -401,6 +482,18 @@ local function run_tests(atModules, tTestDescription)
             atParameters = {}
           end
 
+          -- Validate all input parameters.
+          for _, tParameter in ipairs(atParameters) do
+            if tParameter.fIsOutput~=true then
+              local fValid, strError = tParameter:validate()
+              if fValid==false then
+                tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strTestCaseName, strError)
+                fTestResult = false
+                break
+              end
+            end
+          end
+
           -- Show all parameters for the test case.
           tLogSystem.info("__/Parameters/________________________________________________________________")
           if pl.tablex.size(atParameters)==0 then
@@ -408,17 +501,21 @@ local function run_tests(atModules, tTestDescription)
           else
             tLogSystem.info('Parameters for testcase %d (%s):', uiTestIndex, strTestCaseName)
             for _, tParameter in pairs(atParameters) do
-              tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, tParameter:get_pretty())
+              -- Do not dump output parameter. They have no value yet.
+              if tParameter.fIsOutput~=true then
+                tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, tParameter:get_pretty())
+              end
             end
           end
           tLogSystem.info("______________________________________________________________________________")
 
-          sendRunningTest(uiTestIndex)
-          sendTestState('idle')
+          self:sendRunningTest(uiTestIndex)
+          self:sendTestState('idle')
 
           -- Run a pre action if present.
           local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
-          fStatus, tResult = run_action(strAction)
+          local fStatus
+          fStatus, tResult = self:run_action(strAction)
           if fStatus==true then
             -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
             fStatus, tResult = xpcall(function() tModule:run() end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
@@ -426,19 +523,29 @@ local function run_tests(atModules, tTestDescription)
             if fStatus==true then
               -- Run a post action if present.
               local strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
-              fStatus, tResult = run_action(strAction)
+              fStatus, tResult = self:run_action(strAction)
             end
           end
           -- Run a complete garbare collection after the test case.
           collectgarbage()
+
+          -- Validate all output parameters.
+          for _, tParameter in ipairs(atParameters) do
+            if tParameter.fIsOutput==true then
+              local fValid, strError = tParameter:validate()
+              if fValid==false then
+                tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strTestCaseName, strError)
+              end
+            end
+          end
 
           -- Send the result to the GUI.
           local strTestState = 'error'
           if fStatus==true then
             strTestState = 'ok'
           end
-          sendTestState(strTestState)
-          sendRunningTest(nil)
+          self:sendTestState(strTestState)
+          self:sendRunningTest(nil)
 
           if fStatus~=true then
             local strError
@@ -455,7 +562,7 @@ local function run_tests(atModules, tTestDescription)
             else
               local tJson = tResult
               pl.pretty.dump(tJson)
-              tester:clearInteraction()
+              _G.tester:clearInteraction()
 
               if tJson.button=='again' then
                 fExitTestCase = false
@@ -476,7 +583,7 @@ local function run_tests(atModules, tTestDescription)
     end
 
     -- Close the connection to the netX.
-    tester:closeCommonPlugin()
+    _G.tester:closeCommonPlugin()
 
     -- HACK: the post action needs to know if the board should be finalized or
     --       trashed. Just add a global which can be used in the post action.
@@ -484,7 +591,8 @@ local function run_tests(atModules, tTestDescription)
 
     -- Run a post action if present.
     local strAction = tTestDescription:getPost()
-    fStatus, tResult = run_action(strAction)
+    local fStatus
+    fStatus, tResult = self:run_action(strAction)
     if fStatus~=true then
       local strError
       if tResult~=nil then
@@ -546,7 +654,7 @@ end
 
 
 
-local function __updateTestStati(abActiveTests)
+function TestSystem:__updateTestStati(abActiveTests)
   local astrStati = {}
   local astrStatiQuoted = {}
 
@@ -564,145 +672,167 @@ end
 
 
 
--- Read the test.xml file.
-local tTestDescription = TestDescription(tLogSystem)
-local tResult = tTestDescription:parse('tests.xml')
-if tResult~=true then
-  tLogSystem.error('Failed to parse the test description.')
-else
-  local astrTestNames = tTestDescription:getTestNames()
-  -- Get all test names in the style of a table.
-  local astrQuotedTests = {}
-  for _, strName in ipairs(astrTestNames) do
-    table.insert(astrQuotedTests, string.format('"%s"', strName))
-  end
-  local strTestNames = table.concat(astrQuotedTests, ', ')
+function TestSystem:run()
+  local pl = self.pl
+  local tLogSystem = self.tLogSystem
 
-  -- Now set a new interaction.
-
-  -- Read the first interaction code.
-  tResult = tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', { ['TEST_NAMES']=strTestNames })
-  if tResult==nil then
-    tLogSystem.fatal('Failed to read interaction.')
+  -- Read the test.xml file.
+  local tTestDescription = self.TestDescription(tLogSystem)
+  local tResult = tTestDescription:parse('tests.xml')
+  if tResult~=true then
+    tLogSystem.error('Failed to parse the test description.')
   else
-    local tJson = tResult
-    pl.pretty.dump(tJson)
-    m_atSystemParameter = tJson
-    tester:clearInteraction()
+    local astrTestNames = tTestDescription:getTestNames()
+    -- Get all test names in the style of a table.
+    local astrQuotedTests = {}
+    for _, strName in ipairs(astrTestNames) do
+      table.insert(astrQuotedTests, string.format('"%s"', strName))
+    end
+    local strTestNames = table.concat(astrQuotedTests, ', ')
 
-    -- Loop over all serials.
-    -- ulSerialFirst is the first serial to test
-    -- ulSerialLast is the last serial to test
-    local ulSerialFirst = tonumber(tJson.serialFirst)
-    local ulSerialLast = ulSerialFirst + tonumber(tJson.numberOfBoards) - 1
-    tLogSystem.info('Running over the serials [%d,%d] .', ulSerialFirst, ulSerialLast)
+    -- Now set a new interaction.
 
-    -- Build the initial test states.
-    local astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
+    -- Read the first interaction code.
+    tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', { ['TEST_NAMES']=strTestNames })
+    if tResult==nil then
+      tLogSystem.fatal('Failed to read interaction.')
+    else
+      local tJson = tResult
+      pl.pretty.dump(tJson)
+      self.m_atSystemParameter = tJson
+      _G.tester:clearInteraction()
 
-    -- Set the serial numbers.
-    sendSerials(ulSerialFirst, ulSerialLast)
-    sendTestNames(tTestDescription:getTestNames())
-    sendTestStati(astrStati)
+      -- Loop over all serials.
+      -- ulSerialFirst is the first serial to test
+      -- ulSerialLast is the last serial to test
+      local ulSerialFirst = tonumber(tJson.serialFirst)
+      local ulSerialLast = ulSerialFirst + tonumber(tJson.numberOfBoards) - 1
+      tLogSystem.info('Running over the serials [%d,%d] .', ulSerialFirst, ulSerialLast)
 
-    -- Do not show the serial selector for the first board.
-    local fThisIsTheFirstBoard = true
+      -- Build the initial test states.
+      local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
 
-    ulSerialCurrent = ulSerialFirst
-    repeat
-      if fThisIsTheFirstBoard~=true then
-        -- Reset all tests which are not deactivated to 'idle'.
-        astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
-        sendTestStati(astrStati)
+      -- Set the serial numbers.
+      self:sendSerials(ulSerialFirst, ulSerialLast)
+      self:sendTestNames(tTestDescription:getTestNames())
+      self:sendTestStati(astrStati)
 
-        -- Show the next serial to test even if it might be changed. This is a good memory hook.
-        sendCurrentSerial(ulSerialCurrent)
+      -- Do not show the serial selector for the first board.
+      local fThisIsTheFirstBoard = true
 
-        -- Read the serial selector interaction code.
-        tResult = tester:setInteractionGetJson('jsx/select_next_serial_and_tests.jsx', {
-          ['TEST_NAMES'] = strTestNames,
-          ['TEST_STATI'] = table.concat(astrStatiQuoted, ', '),
-          ['SERIAL_FIRST'] = ulSerialFirst,
-          ['SERIAL_CURRENT'] = ulSerialCurrent,
-          ['SERIAL_LAST'] = ulSerialLast
-        })
-        if tResult==nil then
-          tLogSystem.fatal('Failed to read interaction.')
-          break
-        end
-        local tJson = tResult
-        pl.pretty.dump(tJson)
-        tester:clearInteraction()
-        -- Update the active boards.
-        m_atSystemParameter.activeTests = tJson.activeTests
-        -- Get the next serial number to test.
-        ulSerialCurrent = tonumber(tJson.serialNext)
-        astrStati, astrStatiQuoted = __updateTestStati(m_atSystemParameter.activeTests)
-        sendTestStati(astrStati)
-      end
+      local ulSerialCurrent = ulSerialFirst
+      repeat
+        if fThisIsTheFirstBoard~=true then
+          -- Reset all tests which are not deactivated to 'idle'.
+          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
+          self:sendTestStati(astrStati)
 
-      tLogSystem.info('Testing serial %d .', ulSerialCurrent)
-      m_atSystemParameter.serial = ulSerialCurrent
-      sendCurrentSerial(ulSerialCurrent)
+          -- Show the next serial to test even if it might be changed. This is a good memory hook.
+          self:sendCurrentSerial(ulSerialCurrent)
 
-      tResult = collect_testcases(tTestDescription, tJson.activeTests)
-      if tResult==nil then
-        tLogSystem.fatal('Failed to collect all test cases.')
-      else
-        local atModules = tResult
-
-        tResult = apply_parameters(atModules, tTestDescription, ulSerialCurrent)
-        if tResult==nil then
-          tLogSystem.fatal('Failed to apply the parameters.')
-        else
-          tResult = check_parameters(atModules, tTestDescription)
+          -- Read the serial selector interaction code.
+          tResult = _G.tester:setInteractionGetJson('jsx/select_next_serial_and_tests.jsx', {
+            ['TEST_NAMES'] = strTestNames,
+            ['TEST_STATI'] = table.concat(astrStatiQuoted, ', '),
+            ['SERIAL_FIRST'] = ulSerialFirst,
+            ['SERIAL_CURRENT'] = ulSerialCurrent,
+            ['SERIAL_LAST'] = ulSerialLast
+          })
           if tResult==nil then
-            tLogSystem.fatal('Failed to check the parameters.')
+            tLogSystem.fatal('Failed to read interaction.')
+            break
+          end
+          local tJson = tResult
+          pl.pretty.dump(tJson)
+          _G.tester:clearInteraction()
+          -- Update the active boards.
+          self.m_atSystemParameter.activeTests = tJson.activeTests
+          -- Get the next serial number to test.
+          ulSerialCurrent = tonumber(tJson.serialNext)
+          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
+          self:sendTestStati(astrStati)
+        end
+
+        tLogSystem.info('Testing serial %d .', ulSerialCurrent)
+        self.m_atSystemParameter.serial = ulSerialCurrent
+        self:sendCurrentSerial(ulSerialCurrent)
+
+        tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
+        if tResult==nil then
+          tLogSystem.fatal('Failed to collect all test cases.')
+        else
+          local atModules = tResult
+
+          tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
+          if tResult==nil then
+            tLogSystem.fatal('Failed to apply the parameters.')
           else
-            tResult = run_tests(atModules, tTestDescription)
-            if tResult~=true then
-              break
+            tResult = self:check_parameters(atModules, tTestDescription)
+            if tResult==nil then
+              tLogSystem.fatal('Failed to check the parameters.')
+            else
+              tResult = self:run_tests(atModules, tTestDescription)
+              if tResult~=true then
+                break
+              end
             end
           end
         end
-      end
 
-      -- Show the serial selector before the next test run.
-      fThisIsTheFirstBoard = false
+        -- Show the serial selector before the next test run.
+        fThisIsTheFirstBoard = false
 
-      -- Show a finish message if this is the last board.
-      if ulSerialCurrent==ulSerialLast then
-        tResult = tester:setInteractionGetJson('jsx/test_last_board.jsx')
-        if tResult==nil then
-          tLogSystem.fatal('Failed to read interaction.')
-          break
-        end
-        local tJson = tResult
-        pl.pretty.dump(tJson)
-        tester:clearInteraction()
-        if tJson.button=='back' then
-          -- The user does not want to quit.
-          -- Keep the serial at the same number and go on.
+        -- Show a finish message if this is the last board.
+        if ulSerialCurrent==ulSerialLast then
+          tResult = _G.tester:setInteractionGetJson('jsx/test_last_board.jsx')
+          if tResult==nil then
+            tLogSystem.fatal('Failed to read interaction.')
+            break
+          end
+          local tJson = tResult
+          pl.pretty.dump(tJson)
+          _G.tester:clearInteraction()
+          if tJson.button=='back' then
+            -- The user does not want to quit.
+            -- Keep the serial at the same number and go on.
+          else
+            -- The user agreed to quit.
+            ulSerialCurrent = ulSerialCurrent + 1
+          end
         else
-          -- The user agreed to quit.
+          -- Move to the next board.
           ulSerialCurrent = ulSerialCurrent + 1
         end
-      else
-        -- Move to the next board.
-        ulSerialCurrent = ulSerialCurrent + 1
-      end
-    until ulSerialCurrent>ulSerialLast
+      until ulSerialCurrent>ulSerialLast
+    end
   end
 end
 
-if m_zmqSocket~=nil then
-  if m_zmqSocket:closed()==false then
-    m_zmqSocket:close()
+
+
+function TestSystem:disconnect()
+  local m_zmqSocket = self.m_zmqSocket
+  if m_zmqSocket~=nil then
+    if m_zmqSocket:closed()==false then
+      m_zmqSocket:close()
+    end
+    self.m_zmqSocket = nil
   end
-  m_zmqSocket = nil
+
+  local m_zmqContext = self.m_zmqContext
+  if m_zmqContext~=nil then
+    m_zmqContext:destroy()
+    self.m_zmqContext = nil
+  end
 end
 
-if m_zmqContext~=nil then
-  m_zmqContext:destroy()
-  m_zmqContext = nil
-end
+
+
+
+
+local usServerPort = tonumber(arg[1])
+local tTestSystem = TestSystem(usServerPort)
+tTestSystem:connect()
+tTestSystem:createLogger()
+tTestSystem:run()
+tTestSystem:disconnect()
