@@ -316,15 +316,6 @@ t:install('jsx/', '${install_base}/jsx')
 -- Copy the complete "doc" folder.
 --t:install('doc/', '${install_doc}/')
 
--- Copy the wrapper.
-if strDistId=='windows' then
-  t:install('wrapper/windows/tester.bat',  '${install_executables}/')
-elseif strDistId=='ubuntu' then
-  t:install('wrapper/linux/tester',        '${install_executables}/')
-else
-  tResult = nil
-end
-
 -- Register a new post trigger action.
 t:register_post_trigger(tPostTriggerAction.run, tPostTriggerAction, 50)
 
