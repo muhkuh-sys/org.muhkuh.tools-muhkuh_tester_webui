@@ -483,11 +483,11 @@ function TestSystem:run_tests(atModules, tTestDescription)
           end
 
           -- Validate all input parameters.
-          for _, tParameter in ipairs(atParameters) do
+          for strParameterName, tParameter in pairs(atParameters) do
             if tParameter.fIsOutput~=true then
               local fValid, strError = tParameter:validate()
               if fValid==false then
-                tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strTestCaseName, strError)
+                tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
                 fTestResult = false
                 break
               end
@@ -530,11 +530,11 @@ function TestSystem:run_tests(atModules, tTestDescription)
           collectgarbage()
 
           -- Validate all output parameters.
-          for _, tParameter in ipairs(atParameters) do
+          for strParameterName, tParameter in pairs(atParameters) do
             if tParameter.fIsOutput==true then
               local fValid, strError = tParameter:validate()
               if fValid==false then
-                tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strTestCaseName, strError)
+                tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
               end
             end
           end
