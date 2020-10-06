@@ -147,7 +147,7 @@ function TestSystem:sendCurrentSerial(uiCurrentSerial)
 end
 
 
-
+--[[
 function TestSystem:sendRunningTest(uiRunningTest)
   local tData = {
     runningTest=uiRunningTest
@@ -164,6 +164,39 @@ function TestSystem:sendTestState(strTestState)
   }
   local strJson = self.json.encode(tData)
   self.m_zmqSocket:send('RES'..strJson)
+end
+--]]
+
+
+
+function TestSystem:sendTestDeviceStart()
+  self.m_zmqSocket:send('TDS')
+end
+
+
+
+function TestSystem:sendTestDeviceFinished()
+  self.m_zmqSocket:send('TDF')
+end
+
+
+
+function TestSystem:sendTestStepStart(uiStepIndex)
+  local tData = {
+    stepIndex=uiStepIndex
+  }
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('TSS'..strJson)
+end
+
+
+
+function TestSystem:sendTestStepFinished(strTestStepState)
+  local tData = {
+    testStepState=strTestStepState
+  }
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('TSF'..strJson)
 end
 
 
@@ -509,8 +542,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
           end
           tLogSystem.info("______________________________________________________________________________")
 
-          self:sendRunningTest(uiTestIndex)
-          self:sendTestState('idle')
+--          self:sendRunningTest(uiTestIndex)
+--          self:sendTestState('idle')
+          self:sendTestStepStart(uiTestIndex)
 
           -- Run a pre action if present.
           local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
@@ -544,8 +578,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
           if fStatus==true then
             strTestState = 'ok'
           end
-          self:sendTestState(strTestState)
-          self:sendRunningTest(nil)
+--          self:sendTestState(strTestState)
+--          self:sendRunningTest(nil)
+          self:sendTestStepFinished(strTestState)
 
           if fStatus~=true then
             local strError
