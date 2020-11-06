@@ -22,6 +22,7 @@ function TestSystem:_init(usServerPort)
   self.m_zmqPort = usServerPort
   self.m_zmqContext = nil
   self.m_zmqSocket = nil
+  self.m_atTestExecutionParameter = nil
   self.m_atSystemParameter = nil
 end
 
@@ -718,6 +719,24 @@ function TestSystem:run()
   if tResult~=true then
     tLogSystem.error('Failed to parse the test description.')
   else
+    -- Create all system parameter.
+    local atSystemParameter = {}
+    local tSystemParameter = tTestDescription:getSystemParameter()
+    if tSystemParameter~=nil then
+      for _, tParameter in ipairs(tSystemParameter) do
+        local strName = tParameter.name
+        local strValue = tParameter.value
+        local strOldValue = atSystemParameter[strName]
+        if strOldValue==nil then
+          tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
+        else
+          tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+        end
+        atSystemParameter[strName] = strValue
+      end
+    end
+    self.m_atSystemParameter = atSystemParameter
+
     local astrTestNames = tTestDescription:getTestNames()
     -- Get all test names in the style of a table.
     local astrQuotedTests = {}
@@ -735,7 +754,7 @@ function TestSystem:run()
     else
       local tJson = tResult
       pl.pretty.dump(tJson)
-      self.m_atSystemParameter = tJson
+      self.m_atTestExecutionParameter = tJson
       _G.tester:clearInteraction()
 
       if tJson.fActivateDebugging==true then
@@ -784,7 +803,7 @@ function TestSystem:run()
       tLogSystem.info('Running over the serials [%d,%d] .', ulSerialFirst, ulSerialLast)
 
       -- Build the initial test states.
-      local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
+      local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
 
       -- Set the serial numbers.
       self:sendSerials(ulSerialFirst, ulSerialLast)
@@ -798,7 +817,7 @@ function TestSystem:run()
       repeat
         if fThisIsTheFirstBoard~=true then
           -- Reset all tests which are not deactivated to 'idle'.
-          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
+          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
           self:sendTestStati(astrStati)
 
           -- Show the next serial to test even if it might be changed. This is a good memory hook.
@@ -820,10 +839,10 @@ function TestSystem:run()
           pl.pretty.dump(tJson)
           _G.tester:clearInteraction()
           -- Update the active boards.
-          self.m_atSystemParameter.activeTests = tJson.activeTests
+          self.m_atTestExecutionParameter.activeTests = tJson.activeTests
           -- Get the next serial number to test.
           ulSerialCurrent = tonumber(tJson.serialNext)
-          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atSystemParameter.activeTests)
+          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
           self:sendTestStati(astrStati)
         end
 
