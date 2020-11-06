@@ -308,7 +308,7 @@ end
 t:install('test_system.lua', '${install_base}/')
 
 -- Copy the complete "lua" folder.
---t:install('lua/', '${install_lua_path}/')
+t:install('lua/', '${install_lua_path}/')
 
 -- Copy the complete "jsx" folder.
 t:install('jsx/', '${install_base}/jsx')

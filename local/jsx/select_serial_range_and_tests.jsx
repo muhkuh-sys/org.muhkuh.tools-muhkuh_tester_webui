@@ -17,7 +17,8 @@ class Interaction extends React.Component {
       number_of_boards: 1,
       strTestsSummary: 'all',
       uiTestsSelected: astrTests.length,
-      astrStati: _astrStati
+      astrStati: _astrStati,
+      fActivateDebugging: false
     };
   }
 
@@ -68,6 +69,13 @@ class Interaction extends React.Component {
     });
   };
 
+  handleActivateDebuggingClick = () => {
+    const val = !this.state.fActivateDebugging;
+    this.setState({
+      fActivateDebugging: val
+    });
+  };
+
   handleStartButton = () => {
     console.log('Start testing.');
 
@@ -79,7 +87,8 @@ class Interaction extends React.Component {
     const tMsg = {
       serialFirst: this.state.serial_first,
       numberOfBoards: this.state.number_of_boards,
-      activeTests: atActiveTests
+      activeTests: atActiveTests,
+      fActivateDebugging: this.state.fActivateDebugging
     };
     fnSend(tMsg);
   };
@@ -134,6 +143,15 @@ class Interaction extends React.Component {
               </ListItem>
             );}, this)}
             </List>
+          </ExpansionPanelDetails>
+        </ExpansionPanel>
+
+        <ExpansionPanel style={{margin: '1em'}}>
+          <ExpansionPanelSummary expandIcon={<SvgIcon><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/><path d="M0 0h24v24H0z" fill="none"/></SvgIcon>}>
+            <Typography>Advanced options</Typography>
+          </ExpansionPanelSummary>
+          <ExpansionPanelDetails>
+            <FormControlLabel value="end" label="Activate debugging" control={<Checkbox checked={this.state.fActivateDebugging} onChange={this.handleActivateDebuggingClick} />} />
           </ExpansionPanelDetails>
         </ExpansionPanel>
 

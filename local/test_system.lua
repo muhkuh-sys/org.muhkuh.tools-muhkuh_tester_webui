@@ -9,6 +9,7 @@ local class = require 'pl.class'
 local TestSystem = class()
 
 function TestSystem:_init(usServerPort)
+  self.debug_hooks = require 'debug_hooks'
   self.pl = require'pl.import_into'()
   self.json = require 'dkjson'
   self.zmq = require 'lzmq'
@@ -552,7 +553,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
           fStatus, tResult = self:run_action(strAction)
           if fStatus==true then
             -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
-            fStatus, tResult = xpcall(function() tModule:run() end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+            fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
             tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
             if fStatus==true then
               -- Run a post action if present.
@@ -736,6 +737,44 @@ function TestSystem:run()
       pl.pretty.dump(tJson)
       self.m_atSystemParameter = tJson
       _G.tester:clearInteraction()
+
+      if tJson.fActivateDebugging==true then
+        local strTargetIp = _G.tester:getCurrentPeerName()
+        if strTargetIp=='' then
+          tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
+        else
+          tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+
+          local fAgain = false
+          local fOk = false
+          repeat
+            local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
+            if tDebugResult==nil then
+              tLogSystem.fatal('Failed to read interaction.')
+              break
+            else
+              pl.pretty.dump(tDebugResult)
+              if tDebugResult.button=='connect' then
+                tLogSystem.info('Connecting to debug server on %s.', strTargetIp)
+                local tInitResult = self.debug_hooks.init(strTargetIp)
+                tLogSystem.info('Debug init: %s', tostring(tInitResult))
+                if tInitResult==true then
+                  fOk = true
+                else
+                  fOk = false
+                  fAgain = true
+                end
+              elseif tDebugResult.button=='cancel' then
+                fOk = true
+              else
+                fOk = false
+              end
+            end
+          until fOk==true
+
+          _G.tester:clearInteraction()
+        end
+      end
 
       -- Loop over all serials.
       -- ulSerialFirst is the first serial to test

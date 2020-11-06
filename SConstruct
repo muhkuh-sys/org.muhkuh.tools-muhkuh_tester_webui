@@ -95,7 +95,11 @@ tArcList0.AddFiles('',
 tArcList0.AddFiles('',
     'local/test_system.lua')
 
+tArcList0.AddFiles('lua/',
+    'local/lua/debug_hooks.lua')
+
 tArcList0.AddFiles('jsx/',
+    'local/jsx/connect_debugger.jsx',
     'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
     'local/jsx/test_failed.jsx',
@@ -122,7 +126,11 @@ tArcList1.AddFiles('',
 tArcList1.AddFiles('',
     'local/test_system.lua')
 
+tArcList1.AddFiles('lua/',
+    'local/lua/debug_hooks.lua')
+
 tArcList1.AddFiles('jsx/',
+    'local/jsx/connect_debugger.jsx',
     'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
     'local/jsx/test_failed.jsx',
