@@ -149,35 +149,17 @@ function TestSystem:sendCurrentSerial(uiCurrentSerial)
 end
 
 
---[[
-function TestSystem:sendRunningTest(uiRunningTest)
+function TestSystem:sendTestRunStart()
   local tData = {
-    runningTest=uiRunningTest
+    attributes = self.m_atSystemParameter
   }
   local strJson = self.json.encode(tData)
-  self.m_zmqSocket:send('RUN'..strJson)
+  self.m_zmqSocket:send('TDS'..strJson)
 end
 
 
 
-function TestSystem:sendTestState(strTestState)
-  local tData = {
-    testState=strTestState
-  }
-  local strJson = self.json.encode(tData)
-  self.m_zmqSocket:send('RES'..strJson)
-end
---]]
-
-
-
-function TestSystem:sendTestDeviceStart()
-  self.m_zmqSocket:send('TDS')
-end
-
-
-
-function TestSystem:sendTestDeviceFinished()
+function TestSystem:sendTestRunFinished()
   self.m_zmqSocket:send('TDF')
 end
 
@@ -185,7 +167,8 @@ end
 
 function TestSystem:sendTestStepStart(uiStepIndex)
   local tData = {
-    stepIndex=uiStepIndex
+    stepIndex=uiStepIndex,
+    attributes = self.m_atSystemParameter
   }
   local strJson = self.json.encode(tData)
   self.m_zmqSocket:send('TSS'..strJson)
@@ -509,6 +492,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
         if tModule==nil then
           tLogSystem.info('Not running deactivated test case %02d (%s).', uiTestIndex, strTestCaseName)
         else
+          self:sendTestStepStart(uiTestIndex)
+
           tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
 
           -- Get the parameters for the module.
@@ -544,10 +529,6 @@ function TestSystem:run_tests(atModules, tTestDescription)
           end
           tLogSystem.info("______________________________________________________________________________")
 
---          self:sendRunningTest(uiTestIndex)
---          self:sendTestState('idle')
-          self:sendTestStepStart(uiTestIndex)
-
           -- Run a pre action if present.
           local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
           local fStatus
@@ -574,15 +555,6 @@ function TestSystem:run_tests(atModules, tTestDescription)
               end
             end
           end
-
-          -- Send the result to the GUI.
-          local strTestState = 'error'
-          if fStatus==true then
-            strTestState = 'ok'
-          end
---          self:sendTestState(strTestState)
---          self:sendRunningTest(nil)
-          self:sendTestStepFinished(strTestState)
 
           if fStatus~=true then
             local strError
@@ -611,6 +583,13 @@ function TestSystem:run_tests(atModules, tTestDescription)
               end
             end
           end
+
+          -- Send the result to the GUI.
+          local strTestState = 'error'
+          if fStatus==true then
+            strTestState = 'ok'
+          end
+          self:sendTestStepFinished(strTestState)
         end
       until fExitTestCase==true
 
@@ -846,9 +825,11 @@ function TestSystem:run()
           self:sendTestStati(astrStati)
         end
 
-        tLogSystem.info('Testing serial %d .', ulSerialCurrent)
         self.m_atSystemParameter.serial = ulSerialCurrent
         self:sendCurrentSerial(ulSerialCurrent)
+
+        self:sendTestRunStart()
+        tLogSystem.info('Testing serial %d .', ulSerialCurrent)
 
         tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
         if tResult==nil then
@@ -871,6 +852,8 @@ function TestSystem:run()
             end
           end
         end
+
+        self:sendTestRunFinished()
 
         -- Show the serial selector before the next test run.
         fThisIsTheFirstBoard = false
