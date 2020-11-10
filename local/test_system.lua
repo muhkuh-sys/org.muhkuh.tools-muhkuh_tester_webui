@@ -165,9 +165,11 @@ end
 
 
 
-function TestSystem:sendTestStepStart(uiStepIndex)
+function TestSystem:sendTestStepStart(uiStepIndex, strTestCaseId, strTestCaseName)
   local tData = {
     stepIndex=uiStepIndex,
+    testId=strTestCaseId,
+    testName=strTestCaseName,
     attributes = self.m_atSystemParameter
   }
   local strJson = self.json.encode(tData)
@@ -492,7 +494,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
         if tModule==nil then
           tLogSystem.info('Not running deactivated test case %02d (%s).', uiTestIndex, strTestCaseName)
         else
-          self:sendTestStepStart(uiTestIndex)
+          local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
+          self:sendTestStepStart(uiTestIndex, strTestCaseId, strTestCaseName)
 
           tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
 
