@@ -2,17 +2,7 @@ class Interaction extends React.Component {
   constructor(props) {
     super(props);
 
-    const uiLastRunningTest = fnGetLastRunningTest();
-    const astrTestNames = fnGetTestNames();
-
-    let strMessage = '';
-    if( uiLastRunningTest!==null ) {
-      const strTestName = astrTestNames[uiLastRunningTest];
-      strMessage = `Test ${uiLastRunningTest+1} ist fehlgeschlagen (${strTestName}).`;
-    } else {
-      strMessage = 'Der letzte Test ist fehlgeschlagen.\n';
-    }
-    this.strMessage = strMessage;
+    this.strMessage = 'Test @FAILED_TEST_IDX@ ist fehlgeschlagen (@FAILED_TEST_NAME@).';
   }
 
   handleButtonAgain = () => {

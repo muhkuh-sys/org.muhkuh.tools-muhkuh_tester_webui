@@ -568,7 +568,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
             end
             tLogSystem.error('Error running the test: %s', strError)
 
-            local tResult = tester:setInteractionGetJson('jsx/test_failed.jsx', {})
+            local tResult = tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
             else
