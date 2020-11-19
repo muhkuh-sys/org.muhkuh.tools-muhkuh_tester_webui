@@ -9,6 +9,7 @@ local class = require 'pl.class'
 local TestSystem = class()
 
 function TestSystem:_init(usServerPort)
+  self.date = require 'date'
   self.debug_hooks = require 'debug_hooks'
   self.pl = require'pl.import_into'()
   self.json = require 'dkjson'
@@ -464,6 +465,7 @@ end
 
 
 function TestSystem:run_tests(atModules, tTestDescription)
+  local date = self.date
   local pl = self.pl
   local tLogSystem = self.tLogSystem
   -- Run all enabled modules with their parameter.
@@ -499,6 +501,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
 
           tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
 
+          local tEventTestRun = { start=date(false):fmt('%Y-%m-%d %H:%M:%S'), parameter={} }
+
           -- Get the parameters for the module.
           local atParameters = tModule.atParameter
           if atParameters==nil then
@@ -526,7 +530,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
             for _, tParameter in pairs(atParameters) do
               -- Do not dump output parameter. They have no value yet.
               if tParameter.fIsOutput~=true then
-                tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, tParameter:get_pretty())
+                local strValue = tParameter:get_pretty()
+                tEventTestRun.parameter[tParameter.strName] = strValue
+                tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, strValue)
               end
             end
           end
@@ -592,6 +598,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
           if fStatus==true then
             strTestState = 'ok'
           end
+          tEventTestRun['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
+          tEventTestRun.result = strTestState
+          tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
           self:sendTestStepFinished(strTestState)
         end
       until fExitTestCase==true
