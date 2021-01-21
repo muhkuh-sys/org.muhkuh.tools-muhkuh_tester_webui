@@ -98,6 +98,9 @@ class Interaction extends React.Component {
             onChange={this.handleChange_NextSerial()}
             type="number"
             required={true}
+            InputProps={{
+              style: { fontSize: '3em' }
+            }}
             InputLabelProps={{
               shrink: true,
             }}

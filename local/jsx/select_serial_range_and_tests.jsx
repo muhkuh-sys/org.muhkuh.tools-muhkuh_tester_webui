@@ -104,6 +104,9 @@ class Interaction extends React.Component {
             onChange={this.handleChange_FirstSerial()}
             type="number"
             required={true}
+            InputProps={{
+              style: { fontSize: '3em' }
+            }}
             InputLabelProps={{
               shrink: true,
             }}
@@ -118,6 +121,9 @@ class Interaction extends React.Component {
             onChange={this.handleChange_NumberOfBoards()}
             type="number"
             required={true}
+            InputProps={{
+              style: { fontSize: '3em' }
+            }}
             InputLabelProps={{
               shrink: true,
             }}
