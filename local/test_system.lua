@@ -487,6 +487,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
     local astrTestNames = tTestDescription:getTestNames()
     local uiNumberOfTests = tTestDescription:getNumberOfTests()
     for uiTestIndex = 1, uiNumberOfTests do
+      local fContinueWithNextTestCase = true
       repeat
         local fExitTestCase = true
 
@@ -516,9 +517,13 @@ function TestSystem:run_tests(atModules, tTestDescription)
               if fValid==false then
                 tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
                 fTestResult = false
+                fContinueWithNextTestCase = false
                 break
               end
             end
+          end
+          if fTestResult~=true then
+            break
           end
 
           -- Show all parameters for the test case.
@@ -586,6 +591,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
                 fExitTestCase = false
               elseif tJson.button=='error' then
                 fTestResult = false
+                fContinueWithNextTestCase = false
+              elseif tJson.button=='ignore' then
+                fTestResult = false
               else
                 fTestResult = false
                 fTestIsNotCanceled = false
@@ -605,7 +613,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
         end
       until fExitTestCase==true
 
-      if fTestResult~=true then
+      if fContinueWithNextTestCase~=true then
         break
       end
     end
