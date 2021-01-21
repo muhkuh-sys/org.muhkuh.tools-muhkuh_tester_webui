@@ -40,7 +40,7 @@ class Interaction extends React.Component {
         </div>
         <div style={{width: '100%', textAlign: 'center', verticalAlign: 'middle', padding: '2em'}}>
           <div style={{display: 'inline', paddingLeft: '1em', paddingRight: '1em'}}>
-            <Button variant="extendedFab" onClick={this.handleButtonAgain}>
+            <Button color="primary" variant="contained" onClick={this.handleButtonAgain}>
               <SvgIcon>
                 <path d="M0 0h24v24H0z" fill="none"/><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
               </SvgIcon>
@@ -48,7 +48,7 @@ class Interaction extends React.Component {
             </Button>
           </div>
           <div style={{display: 'inline', paddingLeft: '1em', paddingRight: '1em'}}>
-            <Button variant="extendedFab" onClick={this.handleButtonError}>
+            <Button color="secondary" variant="contained" onClick={this.handleButtonError}>
               <SvgIcon>
                 <path d="M0 0h24v24H0z" fill="none"/><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
               </SvgIcon>
