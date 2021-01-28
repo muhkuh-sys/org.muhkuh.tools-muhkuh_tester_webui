@@ -712,6 +712,20 @@ function TestSystem:run()
   local pl = self.pl
   local tLogSystem = self.tLogSystem
 
+  -- Read the package file.
+  local tPackageInfo
+  local strPackageInfoFile = pl.path.join('.jonchki', 'package.txt')
+  if pl.path.isfile(strPackageInfoFile)~=true then
+    tLogSystem.debug('The package file "%s" does not exist.', strPackageInfoFile)
+  else
+    tLogSystem.debug('Reading the package file "%s".', strPackageInfoFile)
+    local strError
+    tPackageInfo, strError = pl.config.read(strPackageInfoFile)
+    if tPackageInfo==nil then
+      tLogSystem.debug('Failed to read the package file "%s": %s', strPackageInfoFile, tostring(strError))
+    end
+  end
+
   -- Read the test.xml file.
   local tTestDescription = self.TestDescription(tLogSystem)
   local tResult = tTestDescription:parse('tests.xml')
@@ -752,7 +766,13 @@ function TestSystem:run()
       tLogSystem.fatal('Failed to read interaction.')
     else
       local tJson = tResult
+
       pl.pretty.dump(tJson)
+      _G.tester:sendLogEvent('muhkuh.test.start', {
+        package = tPackageInfo,
+        selection = tJson
+      })
+
       self.m_atTestExecutionParameter = tJson
       _G.tester:clearInteraction()
 
