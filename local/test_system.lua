@@ -749,6 +749,7 @@ function TestSystem:run()
       end
     end
     self.m_atSystemParameter = atSystemParameter
+    _G.tester:setSystemParameter(atSystemParameter)
 
     local astrTestNames = tTestDescription:getTestNames()
     -- Get all test names in the style of a table.
