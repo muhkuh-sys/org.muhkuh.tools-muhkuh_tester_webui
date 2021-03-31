@@ -9,6 +9,12 @@ local class = require 'pl.class'
 local TestSystem = class()
 
 function TestSystem:_init(usServerPort)
+  -- Get the LUA version number in the form major * 100 + minor .
+  local strMaj, strMin = string.match(_VERSION, '^Lua (%d+)%.(%d+)$')
+  if strMaj~=nil then
+    self.LUA_VER_NUM = tonumber(strMaj) * 100 + tonumber(strMin)
+  end
+
   self.date = require 'date'
   self.debug_hooks = require 'debug_hooks'
   self.pl = require'pl.import_into'()
@@ -549,7 +555,11 @@ function TestSystem:run_tests(atModules, tTestDescription)
           fStatus, tResult = self:run_action(strAction)
           if fStatus==true then
             -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
-            fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
+            if self.LUA_VER_NUM==501 then
+              fStatus, tResult = xpcall(function() self.debug_hooks.run_teststep(tModule, uiTestIndex) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+            else
+              fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
+            end
             tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
             if fStatus==true then
               -- Run a post action if present.
