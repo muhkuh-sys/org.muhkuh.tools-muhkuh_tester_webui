@@ -580,6 +580,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
             end
           end
 
+          local strTestMessage = ''
           if fStatus~=true then
             local strError
             if tResult~=nil then
@@ -587,6 +588,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
             else
               strError = 'No error message.'
             end
+            strTestMessage = strError
             tLogSystem.error('Error running the test: %s', strError)
 
             local tResult = tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
@@ -618,6 +620,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
           end
           tEventTestRun['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
           tEventTestRun.result = strTestState
+          tEventTestRun.message = strTestMessage
           tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
           self:sendTestStepFinished(strTestState)
         end
