@@ -492,6 +492,21 @@ function TestSystem:run_tests(atModules, tTestDescription)
   else
     local astrTestNames = tTestDescription:getTestNames()
     local uiNumberOfTests = tTestDescription:getNumberOfTests()
+
+    -- Collect all results in the "test result" event.
+    local tTestSteps = {}
+    local tEventTestResult = { start=date(false):fmt('%Y-%m-%d %H:%M:%S'), steps=tTestSteps }
+    for uiTestIndex = 1, uiNumberOfTests do
+      local strTestCaseName = astrTestNames[uiTestIndex]
+      local strState = 'pending'
+      local tModule = atModules[uiTestIndex]
+      if tModule==nil then
+        strState = 'inactive'
+      end
+      local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
+      table.insert(tTestSteps, { name=strTestCaseName, id=strTestCaseId, state=strState, message='' })
+    end
+
     for uiTestIndex = 1, uiNumberOfTests do
       local fContinueWithNextTestCase = true
       repeat
@@ -591,7 +606,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
             strTestMessage = strError
             tLogSystem.error('Error running the test: %s', strError)
 
-            local tResult = tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
+            local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
             else
@@ -621,7 +636,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
           tEventTestRun['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
           tEventTestRun.result = strTestState
           tEventTestRun.message = strTestMessage
-          tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
+          _G.tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
+          tTestSteps[uiTestIndex].state = strTestState
+          tTestSteps[uiTestIndex].message = strTestMessage
           self:sendTestStepFinished(strTestState)
         end
       until fExitTestCase==true
@@ -630,6 +647,10 @@ function TestSystem:run_tests(atModules, tTestDescription)
         break
       end
     end
+
+    tEventTestResult['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
+    tEventTestResult.result = tostring(fTestResult)
+    _G.tester:sendLogEvent('muhkuh.test.result', tEventTestResult)
 
     -- Close the connection to the netX.
     _G.tester:closeCommonPlugin()
