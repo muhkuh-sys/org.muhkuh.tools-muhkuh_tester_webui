@@ -802,6 +802,12 @@ function TestSystem:run()
     else
       local tJson = tResult
 
+      -- Add the system parameter from the dialog.
+      local tAdditionalSystemParameter = tJson.systemParameter
+      if tAdditionalSystemParameter~=nil then
+        pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
+      end
+
       pl.pretty.dump(tJson)
       _G.tester:sendLogEvent('muhkuh.test.start', {
         package = tPackageInfo,

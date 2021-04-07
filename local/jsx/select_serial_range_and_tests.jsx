@@ -12,7 +12,12 @@ class Interaction extends React.Component {
       _astrStati.push('idle');
     });
 
+    this.production_number_reg = new RegExp('^F[0-9]{6}$');
+
     this.state = {
+      production_number: '',
+      production_number_error: true,
+      production_number_helper: 'Missing production number',
       serial_first: 20000,
       number_of_boards: 1,
       strTestsSummary: 'all',
@@ -21,6 +26,29 @@ class Interaction extends React.Component {
       fActivateDebugging: false
     };
   }
+
+  handleChange_ProductionNumber = () => event => {
+    const val = event.target.value;
+    let err = false;
+    let msg = '';
+
+    if( val=='' ) {
+      err = true;
+      msg = 'Missing production number';
+    } else {
+      if( this.production_number_reg.test(val)==true ) {
+        err = false;
+      } else {
+        err = true;
+        msg = 'Must be "F" followed by 6 numbers.';
+      }
+    }
+    this.setState({
+      production_number: val,
+      production_number_error: err,
+      production_number_helper: msg
+    });
+  };
 
   handleChange_FirstSerial = () => event => {
     const val = parseInt(event.target.value);
@@ -88,7 +116,10 @@ class Interaction extends React.Component {
       serialFirst: this.state.serial_first,
       numberOfBoards: this.state.number_of_boards,
       activeTests: atActiveTests,
-      fActivateDebugging: this.state.fActivateDebugging
+      fActivateDebugging: this.state.fActivateDebugging,
+      systemParameter: {
+        production_number: this.state.production_number
+      }
     };
     fnSend(tMsg);
   };
@@ -96,6 +127,24 @@ class Interaction extends React.Component {
   render() {
     return (
       <Paper style={{padding: '1em'}}>
+        <div style={{display: 'block', margin: '1em'}}>
+          <TextField
+            id="production_number"
+            label="Production Number"
+            value={this.state.production_number}
+            onChange={this.handleChange_ProductionNumber()}
+            error={this.state.production_number_error}
+            helperText={this.state.production_number_helper}
+            required={true}
+            InputProps={{
+              style: { fontSize: '3em' }
+            }}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            margin="normal"
+          />
+        </div>
         <div style={{display: 'block', margin: '1em'}}>
           <TextField
             id="serial_first"
@@ -161,7 +210,7 @@ class Interaction extends React.Component {
           </ExpansionPanelDetails>
         </ExpansionPanel>
 
-        <Button disabled={this.state.uiTestsSelected===0} color="primary" variant="contained" onClick={this.handleStartButton}>
+        <Button disabled={this.state.uiTestsSelected===0 || this.state.production_number_error===true} color="primary" variant="contained" onClick={this.handleStartButton}>
           <SvgIcon>
             <path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
           </SvgIcon>
