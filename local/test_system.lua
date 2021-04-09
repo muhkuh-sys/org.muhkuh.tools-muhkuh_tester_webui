@@ -553,18 +553,20 @@ function TestSystem:run_tests(atModules, tTestDescription)
           end
 
           -- Validate all input parameters.
+          local fStatus = true
           for strParameterName, tParameter in pairs(atParameters) do
             if tParameter.fIsOutput~=true then
               local fValid, strError = tParameter:validate()
               if fValid==false then
                 tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+                fStatus = false
                 fTestResult = false
                 fContinueWithNextTestCase = false
                 break
               end
             end
           end
-          if fTestResult~=true then
+          if fStatus~=true then
             break
           end
 
@@ -590,7 +592,6 @@ function TestSystem:run_tests(atModules, tTestDescription)
 
           -- Run a pre action if present.
           local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
-          local fStatus
           fStatus, tResult = self:run_action(strAction)
           atTestStep.pre_result = fStatus
           if fStatus==true then
