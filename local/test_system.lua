@@ -477,9 +477,42 @@ function TestSystem:run_tests(atModules, tTestDescription)
   -- Run all enabled modules with their parameter.
   local fTestIsNotCanceled = true
 
+  local astrTestNames = tTestDescription:getTestNames()
+  local uiNumberOfTests = tTestDescription:getNumberOfTests()
+
+  -- Create an array with all attributes for the condition checks.
+  local atTestSteps = {}
+  for uiTestIndex = 1, uiNumberOfTests do
+    local strTestCaseName = astrTestNames[uiTestIndex]
+    local strState = 'pending'
+    local tModule = atModules[uiTestIndex]
+    if tModule==nil then
+      strState = 'inactive'
+    end
+    local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
+    -- Create a new table for each test case.
+    local atAttr = {
+      name = strTestCaseName,
+      id = strTestCaseId,
+      parameter = {},
+      state = strState,
+      message = ''
+    }
+    -- Register it under the test index and the test name.
+    atTestSteps[uiTestIndex] = atAttr
+    atTestSteps[strTestCaseName] = atAttr
+  end
+  local atConditionAttributes = {
+    start = date(false):fmt('%Y-%m-%d %H:%M:%S'),
+    status_total = true,
+    steps = atTestSteps,
+    system_parameter = self.m_atSystemParameter
+  }
+
   -- Run a pre action if present.
   local strAction = tTestDescription:getPre()
   local fTestResult, tResult = self:run_action(strAction)
+  atConditionAttributes.pre_result = fTestResult
   if fTestResult~=true then
     local strError
     if tResult~=nil then
@@ -487,27 +520,14 @@ function TestSystem:run_tests(atModules, tTestDescription)
     else
       strError = 'No error message.'
     end
+    atConditionAttributes.pre_message = strError
     tLogSystem.error('Error running the global pre action: %s', strError)
 
   else
-    local astrTestNames = tTestDescription:getTestNames()
-    local uiNumberOfTests = tTestDescription:getNumberOfTests()
-
-    -- Collect all results in the "test result" event.
-    local tTestSteps = {}
-    local tEventTestResult = { start=date(false):fmt('%Y-%m-%d %H:%M:%S'), steps=tTestSteps }
     for uiTestIndex = 1, uiNumberOfTests do
-      local strTestCaseName = astrTestNames[uiTestIndex]
-      local strState = 'pending'
-      local tModule = atModules[uiTestIndex]
-      if tModule==nil then
-        strState = 'inactive'
-      end
-      local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
-      table.insert(tTestSteps, { name=strTestCaseName, id=strTestCaseId, state=strState, message='' })
-    end
+      -- Get a shortcut to the attributes of the current test step.
+      local atTestStep = atConditionAttributes.steps[uiTestIndex]
 
-    for uiTestIndex = 1, uiNumberOfTests do
       local fContinueWithNextTestCase = true
       repeat
         local fExitTestCase = true
@@ -523,7 +543,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
 
           tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
 
-          local tEventTestRun = { start=date(false):fmt('%Y-%m-%d %H:%M:%S'), parameter={} }
+          -- Set the start time of the test step.
+          atTestStep['start'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
 
           -- Get the parameters for the module.
           local atParameters = tModule.atParameter
@@ -547,6 +568,9 @@ function TestSystem:run_tests(atModules, tTestDescription)
             break
           end
 
+          -- Clear any old parameters.
+          atTestStep.parameter = {}
+
           -- Show all parameters for the test case.
           tLogSystem.info("__/Parameters/________________________________________________________________")
           if pl.tablex.size(atParameters)==0 then
@@ -557,7 +581,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
               -- Do not dump output parameter. They have no value yet.
               if tParameter.fIsOutput~=true then
                 local strValue = tParameter:get_pretty()
-                tEventTestRun.parameter[tParameter.strName] = strValue
+                atTestStep.parameter[tParameter.strName] = strValue
                 tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, strValue)
               end
             end
@@ -568,6 +592,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
           local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
           local fStatus
           fStatus, tResult = self:run_action(strAction)
+          atTestStep.pre_result = fStatus
           if fStatus==true then
             -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
             if self.LUA_VER_NUM==501 then
@@ -580,7 +605,25 @@ function TestSystem:run_tests(atModules, tTestDescription)
               -- Run a post action if present.
               local strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
               fStatus, tResult = self:run_action(strAction)
+              atTestStep.post_result = fStatus
+              if fStatus~=true then
+                local strError
+                if tResult~=nil then
+                  strError = tostring(tResult)
+                else
+                  strError = 'No error message.'
+                end
+                atTestStep.post_message = strError
+              end
             end
+          else
+            local strError
+            if tResult~=nil then
+              strError = tostring(tResult)
+            else
+              strError = 'No error message.'
+            end
+            atTestStep.pre_message = strError
           end
           -- Run a complete garbare collection after the test case.
           collectgarbage()
@@ -595,6 +638,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
             end
           end
 
+          -- Get the test message.
           local strTestMessage = ''
           if fStatus~=true then
             local strError
@@ -605,7 +649,34 @@ function TestSystem:run_tests(atModules, tTestDescription)
             end
             strTestMessage = strError
             tLogSystem.error('Error running the test: %s', strError)
+          end
 
+          -- Get the test state.
+          local strTestState = 'error'
+          if fStatus==true then
+            strTestState = 'ok'
+          end
+
+          -- Update the condition attributes to the test result.
+          atTestStep.state = strTestState
+          atTestStep.result = fStatus
+          atTestStep.message = strTestMessage
+          -- Set the end time of the test step.
+          atTestStep['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
+
+          -- Send the result to the GUI.
+          local tEventTestRun = {
+            start = atTestStep.start,
+            ['end'] = atTestStep['end'],
+            parameter= atTestStep.parameter,
+            state = atTestStep.state,
+            result = atTestStep.result,
+            message = atTestStep.message
+          }
+          _G.tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
+          self:sendTestStepFinished(strTestState)
+
+          if fStatus~=true then
             local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
@@ -627,19 +698,6 @@ function TestSystem:run_tests(atModules, tTestDescription)
               end
             end
           end
-
-          -- Send the result to the GUI.
-          local strTestState = 'error'
-          if fStatus==true then
-            strTestState = 'ok'
-          end
-          tEventTestRun['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
-          tEventTestRun.result = strTestState
-          tEventTestRun.message = strTestMessage
-          _G.tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
-          tTestSteps[uiTestIndex].state = strTestState
-          tTestSteps[uiTestIndex].message = strTestMessage
-          self:sendTestStepFinished(strTestState)
         end
       until fExitTestCase==true
 
@@ -648,8 +706,19 @@ function TestSystem:run_tests(atModules, tTestDescription)
       end
     end
 
-    tEventTestResult['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
-    tEventTestResult.result = tostring(fTestResult)
+    atConditionAttributes['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
+
+    -- Collect all results in the "test result" event.
+    local atTestStepsI = {}
+    for uiIdx, tStep in ipairs(atConditionAttributes.steps) do
+      atTestStepsI[uiIdx] = tStep
+    end
+    local tEventTestResult = {
+      start = atConditionAttributes.start,
+      ['end'] = atConditionAttributes['end'],
+      steps = atTestStepsI,
+      result = tostring(fTestResult)
+    }
     _G.tester:sendLogEvent('muhkuh.test.result', tEventTestResult)
 
     -- Close the connection to the netX.
@@ -663,6 +732,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
     local strAction = tTestDescription:getPost()
     local fStatus
     fStatus, tResult = self:run_action(strAction)
+    atConditionAttributes.post_result = fStatus
     if fStatus~=true then
       local strError
       if tResult~=nil then
@@ -670,6 +740,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
       else
         strError = 'No error message.'
       end
+      atConditionAttributes.post_message = strError
       tLogSystem.error('Error running the global post action: %s', strError)
       -- The test failed if the post action failed.
       fTestResult = false
