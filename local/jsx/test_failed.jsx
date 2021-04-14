@@ -1,6 +1,9 @@
 class Interaction extends React.Component {
   constructor(props) {
     super(props);
+
+    this.strTestName = '@FAILED_TEST_NAME@';
+    this.strMessage = '@FAILED_TEST_MESSAGE@';
   }
 
   handleButtonAgain = () => {
@@ -38,8 +41,8 @@ class Interaction extends React.Component {
             </SvgIcon>
           </div>
           <div style={{display: 'table-cell', textAlign: 'left', verticalAlign: 'middle'}}>
-            <Typography variant="subtitle1" gutterBottom>Test @FAILED_TEST_IDX@ ist fehlgeschlagen (@FAILED_TEST_NAME@).</Typography>
-            <Typography variant="subtitle1" gutterBottom>Die Fehlermeldung ist: @FAILED_TEST_MESSAGE@</Typography>
+            <Typography variant="subtitle1" gutterBottom>Test @FAILED_TEST_IDX@ ist fehlgeschlagen ({this.strTestName}).</Typography>
+            <Typography variant="subtitle1" gutterBottom>Die Fehlermeldung ist: <br/><tt>{this.strMessage}</tt></Typography>
             <Typography variant="subtitle1" gutterBottom>Möchtest Du den letzten Test nochmal ausführen? Vielleicht fehlte ja nur ein Kabel.</Typography>
             <Typography variant="subtitle1" gutterBottom>Oder ist das wirklich ein Fehler?</Typography>
           </div>

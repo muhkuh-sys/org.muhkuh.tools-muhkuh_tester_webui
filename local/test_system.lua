@@ -35,18 +35,8 @@ end
 
 
 
-function TestSystem:__html_escape(strInput)
-  -- Replace all characters which are not...
-  --  * uppercase letters (A-Z)
-  --  * lowercase letters (a-z)
-  --  * numbers (0-9)
-  --  * space
-  --  * underscore
-  --  * minus, which must be escaped, so the pattern is "%-"
-  --  * dot
-  -- ... by the return value of a function. The function converts the character
-  -- to an entity with the ASCII value, so "<" becomes "&3C;".
-  return string.gsub(strInput, '[^A-Za-z0-9 _%-.]', function(c) return string.format('&%02X;', string.byte(c)) end)
+function TestSystem:__escape_ticks(strInput)
+  return string.gsub(strInput, "'", "\\'")
 end
 
 
@@ -832,8 +822,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
           if fStatus==false then
             local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {
               ['FAILED_TEST_IDX']=uiTestIndex,
-              ['FAILED_TEST_NAME']=self:__html_escape(strTestCaseName),
-              ['FAILED_TEST_MESSAGE']=self:__html_escape(atTestStep.message)
+              ['FAILED_TEST_NAME']=self:__escape_ticks(strTestCaseName),
+              ['FAILED_TEST_MESSAGE']=self:__escape_ticks(atTestStep.message)
             })
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
