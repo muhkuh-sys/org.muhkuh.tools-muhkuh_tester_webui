@@ -35,6 +35,22 @@ end
 
 
 
+function TestSystem:__html_escape(strInput)
+  -- Replace all characters which are not...
+  --  * uppercase letters (A-Z)
+  --  * lowercase letters (a-z)
+  --  * numbers (0-9)
+  --  * space
+  --  * underscore
+  --  * minus, which must be escaped, so the pattern is "%-"
+  --  * dot
+  -- ... by the return value of a function. The function converts the character
+  -- to an entity with the ASCII value, so "<" becomes "&3C;".
+  return string.gsub(strInput, '[^A-Za-z0-9 _%-.]', function(c) return string.format('&%02X;', string.byte(c)) end)
+end
+
+
+
 function TestSystem:connect()
   local usServerPort = self.m_zmqPort
   local strAddress = string.format('tcp://127.0.0.1:%d', usServerPort)
@@ -470,6 +486,85 @@ end
 
 
 
+function TestSystem:__runInSandbox(atValues, strExpression)
+  local tResult
+  local strMessage
+  local tLog = self.tLog
+  local pl = self.pl
+
+  -- Create a sandbox with the following system functions and modules.
+  local atEnv = {
+    ['error']=error,
+    ['ipairs']=ipairs,
+    ['next']=next,
+    ['pairs']=pairs,
+    ['print']=print,
+    ['select']=select,
+    ['tonumber']=tonumber,
+    ['tostring']=tostring,
+    ['type']=type,
+    ['math']=math,
+    ['string']=string,
+    ['table']=table
+  }
+  -- Add the user values.
+  pl.tablex.update(atEnv, atValues)
+
+  local strCode = string.format('return %s', strExpression)
+  local tFn, strError = pl.compat.load(strCode, 'condition code', 't', atEnv)
+  if tFn==nil then
+    strMessage = string.format('Invalid expression "%s": %s', strExpression, tostring(strError))
+  else
+    local fRun, tFnResult = pcall(tFn)
+    if fRun==false then
+      strMessage = string.format('Failed to run the expression "%s": %s', strExpression, tostring(tResult))
+    else
+      local strType = type(tFnResult)
+      if strType=='boolean' then
+        tResult = tFnResult
+      else
+        strMessage = string.format('Invalid condition return type for expression "%s": %s', strExpression, strType)
+      end
+    end
+  end
+
+  return tResult
+end
+
+
+
+function TestSystem:__checkConditions(atConditions, atConditionAttributes)
+  local fCondition = false
+  local astrMessages = {}
+  local tLogSystem = self.tLogSystem
+
+  -- Loop over all conditions.
+  for _, tCondition in ipairs(atConditions) do
+    local strCondition = tCondition.condition
+    local tResult, strMessage = self:__runInSandbox(atConditionAttributes, strCondition)
+    tLogSystem.debug('Condition "%s": %s', strCondition, tostring(tResult))
+    -- Stop immediately if a condition could not be evaluated.
+    if tResult==nil then
+      fCondition = nil
+      astrMessages = { strMessage }
+      break
+    elseif tResult==true then
+      fCondition = true
+      -- Does the condition have a message?
+      strMessage = tCondition.message
+      if strMessage==nil or strMessage=='' then
+        -- No message -> create a generic message from the condition.
+        strMessage = string.format('The condition is true: %s', strCondition)
+      end
+      table.insert(astrMessages, strMessage)
+    end
+  end
+
+  return fCondition, astrMessages
+end
+
+
+
 function TestSystem:run_tests(atModules, tTestDescription)
   local date = self.date
   local pl = self.pl
@@ -513,6 +608,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
   local strAction = tTestDescription:getPre()
   local fTestResult, tResult = self:run_action(strAction)
   atConditionAttributes.pre_result = fTestResult
+  atConditionAttributes.status_total = fTestResult
   if fTestResult~=true then
     local strError
     if tResult~=nil then
@@ -541,72 +637,159 @@ function TestSystem:run_tests(atModules, tTestDescription)
           local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
           self:sendTestStepStart(uiTestIndex, strTestCaseId, strTestCaseName)
 
-          tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
-
-          -- Set the start time of the test step.
-          atTestStep['start'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
-
-          -- Get the parameters for the module.
-          local atParameters = tModule.atParameter
-          if atParameters==nil then
-            atParameters = {}
-          end
-
-          -- Validate all input parameters.
           local fStatus = true
-          for strParameterName, tParameter in pairs(atParameters) do
-            if tParameter.fIsOutput~=true then
-              local fValid, strError = tParameter:validate()
-              if fValid==false then
-                tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
-                fStatus = false
-                fTestResult = false
-                fContinueWithNextTestCase = false
+          local strTestState
+          local strTestMessage = ''
+
+          -- Get the list of exclude conditions.
+          local fCondition, astrMessages
+          local atConditions = tTestDescription:getTestCaseExcludeIf(uiTestIndex)
+          if atConditions==nil then
+            -- Failed to get the conditions. Complain but run the test case.
+            tLogSystem.warning('Failed to get the exclude conditions for test case %d (%s). Assuming it is not excluded.', uiTestIndex, strTestCaseName)
+            fCondition = false
+          else
+            -- Check if at least one condition is true.
+            fCondition, astrMessages = self:__checkConditions(atConditions, atConditionAttributes)
+          end
+          if fCondition==nil then
+            tLogSystem.error('Failed to evaluate the ExcludeIf conditions for test case %d (%s): %s', uiTestIndex, strTestCaseName, table.concat(astrMessages, ', '))
+            fContinueWithNextTestCase = false
+            break
+
+          elseif fCondition==true then
+            tLogSystem.info('Execution of the test case %d (%s) was prevented by the following ExcludeIf conditions:', uiTestIndex, strTestCaseName)
+            for _, strMessage in ipairs(astrMessages) do
+              tLogSystem.info('  * %s', strMessage)
+            end
+
+            strTestState = 'excluded'
+            fStatus = nil
+            strTestMessage = table.concat(astrMessages, ', ')
+          else
+            atConditions = tTestDescription:getTestCaseErrorIf(uiTestIndex)
+            if atConditions==nil then
+              -- Failed to get the conditions. Complain but run the test case.
+              tLogSystem.warning('Failed to get the error conditions for test case %d (%s). Assuming it is not in error state.', uiTestIndex, strTestCaseName)
+              fCondition = false
+            else
+              -- Check if at least one condition is true.
+              fCondition, astrMessages = self:__checkConditions(atConditions, atConditionAttributes)
+            end
+            if fCondition==nil then
+              tLogSystem.error('Failed to evaluate the ErrorIf conditions for test case %d (%s): %s', uiTestIndex, strTestCaseName, table.concat(astrMessages, ', '))
+              fContinueWithNextTestCase = false
+              break
+
+            elseif fCondition==true then
+              tLogSystem.error('Execution of the test case %d (%s) was prevented by the following ErrorIf conditions:', uiTestIndex, strTestCaseName)
+              for _, strMessage in ipairs(astrMessages) do
+                tLogSystem.error('  * %s', strMessage)
+              end
+
+              strTestState = 'error'
+              fStatus = false
+              strTestMessage = table.concat(astrMessages, ', ')
+            else
+              tLogSystem.info('Running testcase %d (%s).', uiTestIndex, strTestCaseName)
+
+              -- Set the start time of the test step.
+              atTestStep['start'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
+
+              -- Get the parameters for the module.
+              local atParameters = tModule.atParameter
+              if atParameters==nil then
+                atParameters = {}
+              end
+
+              -- Validate all input parameters.
+              for strParameterName, tParameter in pairs(atParameters) do
+                if tParameter.fIsOutput~=true then
+                  local fValid, strError = tParameter:validate()
+                  if fValid==false then
+                    tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+                    fStatus = false
+                    fTestResult = false
+                    atConditionAttributes.status_total = false
+                    fContinueWithNextTestCase = false
+                    break
+                  end
+                end
+              end
+              if fStatus~=true then
                 break
               end
-            end
-          end
-          if fStatus~=true then
-            break
-          end
 
-          -- Clear any old parameters.
-          atTestStep.parameter = {}
+              -- Clear any old parameters.
+              atTestStep.parameter = {}
 
-          -- Show all parameters for the test case.
-          tLogSystem.info("__/Parameters/________________________________________________________________")
-          if pl.tablex.size(atParameters)==0 then
-            tLogSystem.info('Testcase %d (%s) has no parameter.', uiTestIndex, strTestCaseName)
-          else
-            tLogSystem.info('Parameters for testcase %d (%s):', uiTestIndex, strTestCaseName)
-            for _, tParameter in pairs(atParameters) do
-              -- Do not dump output parameter. They have no value yet.
-              if tParameter.fIsOutput~=true then
-                local strValue = tParameter:get_pretty()
-                atTestStep.parameter[tParameter.strName] = strValue
-                tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, strValue)
+              -- Show all parameters for the test case.
+              tLogSystem.info("__/Parameters/________________________________________________________________")
+              if pl.tablex.size(atParameters)==0 then
+                tLogSystem.info('Testcase %d (%s) has no parameter.', uiTestIndex, strTestCaseName)
+              else
+                tLogSystem.info('Parameters for testcase %d (%s):', uiTestIndex, strTestCaseName)
+                for _, tParameter in pairs(atParameters) do
+                  -- Do not dump output parameter. They have no value yet.
+                  if tParameter.fIsOutput~=true then
+                    local strValue = tParameter:get_pretty()
+                    atTestStep.parameter[tParameter.strName] = strValue
+                    tLogSystem.info('  %02d:%s = %s', uiTestIndex, tParameter.strName, strValue)
+                  end
+                end
               end
-            end
-          end
-          tLogSystem.info("______________________________________________________________________________")
+              tLogSystem.info("______________________________________________________________________________")
 
-          -- Run a pre action if present.
-          local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
-          fStatus, tResult = self:run_action(strAction)
-          atTestStep.pre_result = fStatus
-          if fStatus==true then
-            -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
-            if self.LUA_VER_NUM==501 then
-              fStatus, tResult = xpcall(function() self.debug_hooks.run_teststep(tModule, uiTestIndex) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
-            else
-              fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
-            end
-            tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
-            if fStatus==true then
-              -- Run a post action if present.
-              local strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
+              -- Run a pre action if present.
+              local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
               fStatus, tResult = self:run_action(strAction)
-              atTestStep.post_result = fStatus
+              atTestStep.pre_result = fStatus
+              if fStatus==true then
+                -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
+                if self.LUA_VER_NUM==501 then
+                  fStatus, tResult = xpcall(function() self.debug_hooks.run_teststep(tModule, uiTestIndex) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+                else
+                  fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
+                end
+                tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
+                if fStatus==true then
+                  -- Run a post action if present.
+                  local strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
+                  fStatus, tResult = self:run_action(strAction)
+                  atTestStep.post_result = fStatus
+                  if fStatus~=true then
+                    local strError
+                    if tResult~=nil then
+                      strError = tostring(tResult)
+                    else
+                      strError = 'No error message.'
+                    end
+                    atTestStep.post_message = strError
+                  end
+                end
+              else
+                local strError
+                if tResult~=nil then
+                  strError = tostring(tResult)
+                else
+                  strError = 'No error message.'
+                end
+                atTestStep.pre_message = strError
+              end
+              -- Run a complete garbare collection after the test case.
+              collectgarbage()
+
+              -- Validate all output parameters.
+              for strParameterName, tParameter in pairs(atParameters) do
+                if tParameter.fIsOutput==true then
+                  local fValid, strError = tParameter:validate()
+                  if fValid==false then
+                    tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+                  end
+                end
+              end
+
+              -- Get the test message.
               if fStatus~=true then
                 local strError
                 if tResult~=nil then
@@ -614,56 +797,25 @@ function TestSystem:run_tests(atModules, tTestDescription)
                 else
                   strError = 'No error message.'
                 end
-                atTestStep.post_message = strError
+                strTestMessage = strError
+                tLogSystem.error('Error running the test: %s', strError)
               end
-            end
-          else
-            local strError
-            if tResult~=nil then
-              strError = tostring(tResult)
-            else
-              strError = 'No error message.'
-            end
-            atTestStep.pre_message = strError
-          end
-          -- Run a complete garbare collection after the test case.
-          collectgarbage()
 
-          -- Validate all output parameters.
-          for strParameterName, tParameter in pairs(atParameters) do
-            if tParameter.fIsOutput==true then
-              local fValid, strError = tParameter:validate()
-              if fValid==false then
-                tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+              -- Get the test state.
+              strTestState = 'error'
+              if fStatus==true then
+                strTestState = 'ok'
               end
-            end
-          end
 
-          -- Get the test message.
-          local strTestMessage = ''
-          if fStatus~=true then
-            local strError
-            if tResult~=nil then
-              strError = tostring(tResult)
-            else
-              strError = 'No error message.'
+              -- Set the end time of the test step.
+              atTestStep['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
             end
-            strTestMessage = strError
-            tLogSystem.error('Error running the test: %s', strError)
-          end
-
-          -- Get the test state.
-          local strTestState = 'error'
-          if fStatus==true then
-            strTestState = 'ok'
           end
 
           -- Update the condition attributes to the test result.
           atTestStep.state = strTestState
           atTestStep.result = fStatus
           atTestStep.message = strTestMessage
-          -- Set the end time of the test step.
-          atTestStep['end'] = date(false):fmt('%Y-%m-%d %H:%M:%S')
 
           -- Send the result to the GUI.
           local tEventTestRun = {
@@ -677,8 +829,12 @@ function TestSystem:run_tests(atModules, tTestDescription)
           _G.tester:sendLogEvent('muhkuh.test.run', tEventTestRun)
           self:sendTestStepFinished(strTestState)
 
-          if fStatus~=true then
-            local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {['FAILED_TEST_IDX']=uiTestIndex, ['FAILED_TEST_NAME']=strTestCaseName})
+          if fStatus==false then
+            local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {
+              ['FAILED_TEST_IDX']=uiTestIndex,
+              ['FAILED_TEST_NAME']=self:__html_escape(strTestCaseName),
+              ['FAILED_TEST_MESSAGE']=self:__html_escape(atTestStep.message)
+            })
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
             else
@@ -690,11 +846,14 @@ function TestSystem:run_tests(atModules, tTestDescription)
                 fExitTestCase = false
               elseif tJson.button=='error' then
                 fTestResult = false
+                atConditionAttributes.status_total = false
                 fContinueWithNextTestCase = false
               elseif tJson.button=='ignore' then
                 fTestResult = false
+                atConditionAttributes.status_total = false
               else
                 fTestResult = false
+                atConditionAttributes.status_total = false
                 fTestIsNotCanceled = false
               end
             end
@@ -745,6 +904,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
       tLogSystem.error('Error running the global post action: %s', strError)
       -- The test failed if the post action failed.
       fTestResult = false
+      atConditionAttributes.status_total = false
     end
 
     -- Print the result in huge letters.
