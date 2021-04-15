@@ -14,6 +14,8 @@ class Interaction extends React.Component {
 
     this.production_number_reg = new RegExp('^F[0-9]{6}$');
 
+    this.initialFocus = null;
+
     this.state = {
       production_number: '',
       production_number_error: true,
@@ -25,6 +27,12 @@ class Interaction extends React.Component {
       astrStati: _astrStati,
       fActivateDebugging: false
     };
+  }
+
+  componentDidMount() {
+    if( this.initialFocus!==null ) {
+      this.initialFocus.focusVisible();
+    }
   }
 
   handleChange_ProductionNumber = () => event => {
@@ -143,6 +151,12 @@ class Interaction extends React.Component {
               shrink: true,
             }}
             margin="normal"
+            autoFocus
+            action={
+              actions => {
+                this.initialFocus = actions;
+              }
+            }
           />
         </div>
         <div style={{display: 'block', margin: '1em'}}>
