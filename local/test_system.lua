@@ -35,8 +35,10 @@ end
 
 
 
-function TestSystem:__escape_ticks(strInput)
-  return string.gsub(strInput, "'", "\\'")
+function TestSystem:__quote_with_ticks(strInput)
+  local s = string.gsub(strInput, "'", "\\'")
+  s = string.gsub(s, "\n", "\\n")
+  return s
 end
 
 
@@ -822,8 +824,8 @@ function TestSystem:run_tests(atModules, tTestDescription)
           if fStatus==false then
             local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {
               ['FAILED_TEST_IDX']=uiTestIndex,
-              ['FAILED_TEST_NAME']=self:__escape_ticks(strTestCaseName),
-              ['FAILED_TEST_MESSAGE']=self:__escape_ticks(atTestStep.message)
+              ['FAILED_TEST_NAME']=self:__quote_with_ticks(strTestCaseName),
+              ['FAILED_TEST_MESSAGE']=self:__quote_with_ticks(atTestStep.message)
             })
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
