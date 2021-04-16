@@ -16,6 +16,8 @@ class Interaction extends React.Component {
 
     this.initialFocus = null;
 
+    this.inputRefs = [];
+
     this.state = {
       production_number: '',
       production_number_error: true,
@@ -34,6 +36,23 @@ class Interaction extends React.Component {
       this.initialFocus.focusVisible();
     }
   }
+
+  handleKeyDown = e => {
+    console.debug(e);
+    const event = e;
+    const { currentTarget } = e;
+    if( event.key==='Enter' ) {
+      let inputIndex = this.inputRefs.indexOf(currentTarget);
+      if( inputIndex!==-1 ) {
+        ++inputIndex;
+        if( inputIndex>=this.inputRefs.length ) {
+          inputIndex = 0;
+        }
+        this.inputRefs[inputIndex].focus();
+        event.preventDefault();
+      }
+    }
+  };
 
   handleChange_ProductionNumber = () => event => {
     const val = event.target.value;
@@ -145,8 +164,10 @@ class Interaction extends React.Component {
             helperText={this.state.production_number_helper}
             required={true}
             InputProps={{
+              onKeyDown: this.handleKeyDown,
               style: { fontSize: '3em' }
             }}
+            inputRef={ref => this.inputRefs.push(ref)}
             InputLabelProps={{
               shrink: true,
             }}
@@ -168,8 +189,10 @@ class Interaction extends React.Component {
             type="number"
             required={true}
             InputProps={{
+              onKeyDown: this.handleKeyDown,
               style: { fontSize: '3em' }
             }}
+            inputRef={ref => this.inputRefs.push(ref)}
             InputLabelProps={{
               shrink: true,
             }}
@@ -185,8 +208,10 @@ class Interaction extends React.Component {
             type="number"
             required={true}
             InputProps={{
+              onKeyDown: this.handleKeyDown,
               style: { fontSize: '3em' }
             }}
+            inputRef={ref => this.inputRefs.push(ref)}
             InputLabelProps={{
               shrink: true,
             }}
@@ -194,6 +219,19 @@ class Interaction extends React.Component {
           />
         </div>
         <Typography variant="subtitle1" gutterBottom>The first serial in the test will be {this.state.serial_first}, the last {this.state.serial_first + this.state.number_of_boards - 1} .</Typography>
+
+        <Button
+          disabled={this.state.uiTestsSelected===0 || this.state.production_number_error===true}
+          color="primary"
+          variant="contained"
+          onClick={this.handleStartButton}
+          buttonRef={ref => this.inputRefs.push(ref)}
+        >
+          <SvgIcon>
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+          </SvgIcon>
+          Start testing
+        </Button>
 
         <ExpansionPanel style={{margin: '1em'}}>
           <ExpansionPanelSummary expandIcon={<SvgIcon><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/><path d="M0 0h24v24H0z" fill="none"/></SvgIcon>}>
@@ -223,13 +261,6 @@ class Interaction extends React.Component {
             <FormControlLabel value="end" label="Activate debugging" control={<Checkbox checked={this.state.fActivateDebugging} onChange={this.handleActivateDebuggingClick} />} />
           </ExpansionPanelDetails>
         </ExpansionPanel>
-
-        <Button disabled={this.state.uiTestsSelected===0 || this.state.production_number_error===true} color="primary" variant="contained" onClick={this.handleStartButton}>
-          <SvgIcon>
-            <path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-          </SvgIcon>
-          Start testing
-        </Button>
       </Paper>
     );
   }
