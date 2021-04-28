@@ -481,7 +481,6 @@ end
 function TestSystem:__runInSandbox(atValues, strExpression)
   local tResult
   local strMessage
-  local tLog = self.tLog
   local pl = self.pl
 
   -- Create a sandbox with the following system functions and modules.
@@ -520,7 +519,7 @@ function TestSystem:__runInSandbox(atValues, strExpression)
     end
   end
 
-  return tResult
+  return tResult, strMessage
 end
 
 
