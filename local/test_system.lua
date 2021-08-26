@@ -129,18 +129,6 @@ end
 
 
 
-function TestSystem:sendSerials(ulSerialFirst, ulSerialLast)
-  local tData = {
-    hasSerial=true,
-    firstSerial=ulSerialFirst,
-    lastSerial=ulSerialLast
-  }
-  local strJson = self.json.encode(tData)
-  self.m_zmqSocket:send('SER'..strJson)
-end
-
-
-
 function TestSystem:sendTestNames(astrTestNames)
   local strJson = self.json.encode(astrTestNames)
   self.m_zmqSocket:send('NAM'..strJson)
@@ -989,25 +977,6 @@ function TestSystem:run()
   if tResult~=true then
     tLogSystem.error('Failed to parse the test description.')
   else
-    -- Create all system parameter.
-    local atSystemParameter = {}
-    local tSystemParameter = tTestDescription:getSystemParameter()
-    if tSystemParameter~=nil then
-      for _, tParameter in ipairs(tSystemParameter) do
-        local strName = tParameter.name
-        local strValue = tParameter.value
-        local strOldValue = atSystemParameter[strName]
-        if strOldValue==nil then
-          tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
-        else
-          tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
-        end
-        atSystemParameter[strName] = strValue
-      end
-    end
-    self.m_atSystemParameter = atSystemParameter
-    _G.tester:setSystemParameter(atSystemParameter)
-
     local astrTestNames = tTestDescription:getTestNames()
     -- Get all test names in the style of a table.
     local astrQuotedTests = {}
@@ -1016,120 +985,102 @@ function TestSystem:run()
     end
     local strTestNames = table.concat(astrQuotedTests, ', ')
 
-    -- Now set a new interaction.
-
-    -- Read the first interaction code.
-    tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', { ['TEST_NAMES']=strTestNames })
-    if tResult==nil then
-      tLogSystem.fatal('Failed to read interaction.')
-    else
-      local tJson = tResult
-
-      -- Add the system parameter from the dialog.
-      local tAdditionalSystemParameter = tJson.systemParameter
-      if tAdditionalSystemParameter~=nil then
-        pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
+    -- Run the test until a fatal error occured.
+    local fTestSystemOk = true
+    local strCurrentProductionNumber = ''
+    repeat
+      -- Create all system parameter.
+      local atSystemParameter = {}
+      local tSystemParameter = tTestDescription:getSystemParameter()
+      if tSystemParameter~=nil then
+        for _, tParameter in ipairs(tSystemParameter) do
+          local strName = tParameter.name
+          local strValue = tParameter.value
+          local strOldValue = atSystemParameter[strName]
+          if strOldValue==nil then
+            tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
+          else
+            tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+          end
+          atSystemParameter[strName] = strValue
+        end
       end
+      self.m_atSystemParameter = atSystemParameter
+      _G.tester:setSystemParameter(atSystemParameter)
 
-      pl.pretty.dump(tJson)
-      _G.tester:sendLogEvent('muhkuh.test.start', {
-        package = tPackageInfo,
-        selection = tJson
-      })
+      -- Read the first interaction code.
+      tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', { ['TEST_NAMES']=strTestNames, ['LAST_PRODUCTION_NUMBER']=strCurrentProductionNumber })
+      if tResult==nil then
+        tLogSystem.fatal('Failed to read interaction.')
+        fTestSystemOk = false
+      else
+        local tJson = tResult
 
-      self.m_atTestExecutionParameter = tJson
-      _G.tester:clearInteraction()
+        -- Add the system parameter from the dialog.
+        local tAdditionalSystemParameter = tJson.systemParameter
+        if tAdditionalSystemParameter~=nil then
+          pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
+        end
 
-      if tJson.fActivateDebugging==true then
-        local strTargetIp = _G.tester:getCurrentPeerName()
-        if strTargetIp=='' then
-          tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
-        else
-          tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+        pl.pretty.dump(tJson)
+        _G.tester:sendLogEvent('muhkuh.test.start', {
+          package = tPackageInfo,
+          selection = tJson
+        })
 
-          local fAgain = false
-          local fOk = false
-          repeat
-            local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
-            if tDebugResult==nil then
-              tLogSystem.fatal('Failed to read interaction.')
-              break
-            else
-              pl.pretty.dump(tDebugResult)
-              if tDebugResult.button=='connect' then
-                tLogSystem.info('Connecting to debug server on %s.', strTargetIp)
-                local tInitResult = self.debug_hooks.init(strTargetIp)
-                tLogSystem.info('Debug init: %s', tostring(tInitResult))
-                if tInitResult==true then
+        self.m_atTestExecutionParameter = tJson
+        _G.tester:clearInteraction()
+
+        -- Remember the production number for the next run.
+        strCurrentProductionNumber = self.m_atSystemParameter.production_number
+
+        if tJson.fActivateDebugging==true then
+          local strTargetIp = _G.tester:getCurrentPeerName()
+          if strTargetIp=='' then
+            tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
+          else
+            tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+
+            local fAgain = false
+            local fOk = false
+            repeat
+              local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
+              if tDebugResult==nil then
+                tLogSystem.fatal('Failed to read interaction.')
+                break
+              else
+                pl.pretty.dump(tDebugResult)
+                if tDebugResult.button=='connect' then
+                  tLogSystem.info('Connecting to debug server on %s.', strTargetIp)
+                  local tInitResult = self.debug_hooks.init(strTargetIp)
+                  tLogSystem.info('Debug init: %s', tostring(tInitResult))
+                  if tInitResult==true then
+                    fOk = true
+                  else
+                    fOk = false
+                    fAgain = true
+                  end
+                elseif tDebugResult.button=='cancel' then
                   fOk = true
                 else
                   fOk = false
-                  fAgain = true
                 end
-              elseif tDebugResult.button=='cancel' then
-                fOk = true
-              else
-                fOk = false
               end
-            end
-          until fOk==true
+            until fOk==true
 
-          _G.tester:clearInteraction()
-        end
-      end
-
-      -- Loop over all serials.
-      -- ulSerialFirst is the first serial to test
-      -- ulSerialLast is the last serial to test
-      local ulSerialFirst = tonumber(tJson.serialFirst)
-      local ulSerialLast = ulSerialFirst + tonumber(tJson.numberOfBoards) - 1
-      tLogSystem.info('Running over the serials [%d,%d] .', ulSerialFirst, ulSerialLast)
-
-      -- Build the initial test states.
-      local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-
-      -- Set the serial numbers.
-      self:sendSerials(ulSerialFirst, ulSerialLast)
-      self:sendTestNames(tTestDescription:getTestNames())
-      self:sendTestStati(astrStati)
-
-      -- Do not show the serial selector for the first board.
-      local fThisIsTheFirstBoard = true
-
-      local ulSerialCurrent = ulSerialFirst
-      repeat
-        if fThisIsTheFirstBoard~=true then
-          -- Reset all tests which are not deactivated to 'idle'.
-          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-          self:sendTestStati(astrStati)
-
-          -- Show the next serial to test even if it might be changed. This is a good memory hook.
-          self:sendCurrentSerial(ulSerialCurrent)
-
-          -- Read the serial selector interaction code.
-          tResult = _G.tester:setInteractionGetJson('jsx/select_next_serial_and_tests.jsx', {
-            ['TEST_NAMES'] = strTestNames,
-            ['TEST_STATI'] = table.concat(astrStatiQuoted, ', '),
-            ['SERIAL_FIRST'] = ulSerialFirst,
-            ['SERIAL_CURRENT'] = ulSerialCurrent,
-            ['SERIAL_LAST'] = ulSerialLast
-          })
-          if tResult==nil then
-            tLogSystem.fatal('Failed to read interaction.')
-            break
+            _G.tester:clearInteraction()
           end
-          local tJson = tResult
-          pl.pretty.dump(tJson)
-          _G.tester:clearInteraction()
-          -- Update the active boards.
-          self.m_atTestExecutionParameter.activeTests = tJson.activeTests
-          -- Get the next serial number to test.
-          ulSerialCurrent = tonumber(tJson.serialNext)
-          astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-          self:sendTestStati(astrStati)
         end
 
-        self.m_atSystemParameter.serial = ulSerialCurrent
+        -- Build the initial test states.
+        local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+
+        -- Set the test names and stati.
+        self:sendTestNames(tTestDescription:getTestNames())
+        self:sendTestStati(astrStati)
+
+        -- Get the current serial number.
+        local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
         self:sendCurrentSerial(ulSerialCurrent)
 
         self:sendTestRunStart()
@@ -1138,16 +1089,19 @@ function TestSystem:run()
         tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
         if tResult==nil then
           tLogSystem.fatal('Failed to collect all test cases.')
+          fTestSystemOk = false
         else
           local atModules = tResult
 
           tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
           if tResult==nil then
             tLogSystem.fatal('Failed to apply the parameters.')
+            fTestSystemOk = false
           else
             tResult = self:check_parameters(atModules, tTestDescription)
             if tResult==nil then
               tLogSystem.fatal('Failed to check the parameters.')
+              fTestSystemOk = false
             else
               tResult = self:run_tests(atModules, tTestDescription)
               if tResult~=true then
@@ -1159,32 +1113,11 @@ function TestSystem:run()
 
         self:sendTestRunFinished()
 
-        -- Show the serial selector before the next test run.
-        fThisIsTheFirstBoard = false
-
-        -- Show a finish message if this is the last board.
-        if ulSerialCurrent==ulSerialLast then
-          tResult = _G.tester:setInteractionGetJson('jsx/test_last_board.jsx')
-          if tResult==nil then
-            tLogSystem.fatal('Failed to read interaction.')
-            break
-          end
-          local tJson = tResult
-          pl.pretty.dump(tJson)
-          _G.tester:clearInteraction()
-          if tJson.button=='back' then
-            -- The user does not want to quit.
-            -- Keep the serial at the same number and go on.
-          else
-            -- The user agreed to quit.
-            ulSerialCurrent = ulSerialCurrent + 1
-          end
-        else
-          -- Move to the next board.
-          ulSerialCurrent = ulSerialCurrent + 1
-        end
-      until ulSerialCurrent>ulSerialLast
-    end
+        -- Reset all test stati to idle or disabled.
+        local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+        self:sendTestStati(astrStati)
+      end
+    until fTestSystemOk~=true
   end
 end
 

@@ -7,23 +7,35 @@ class Interaction extends React.Component {
     ];
     this.astrTests = astrTests;
 
+    let strProductionNumber = '@LAST_PRODUCTION_NUMBER@';
+    let strProductionNumberError = false;
+    let strProductionNumberHelper = '';
+    this.fHaveLastProductionNumber = true;
+    if( strProductionNumber=='' ) {
+      strProductionNumberError = true;
+      strProductionNumberHelper = 'Missing production number';
+      this.fHaveLastProductionNumber = false;
+    }
+
     let _astrStati = [];
     astrTests.forEach(function(strTest, uiIndex) {
       _astrStati.push('idle');
     });
 
     this.production_number_reg = new RegExp('^F[0-9]{6}$');
+    this.matrix_label_reg = new RegExp('^([0-9]{7})([0-9a-z])([0-9]{5,6})$');
 
     this.initialFocus = null;
 
     this.inputRefs = [];
 
     this.state = {
-      production_number: '',
-      production_number_error: true,
-      production_number_helper: 'Missing production number',
-      serial_first: 20000,
-      number_of_boards: 1,
+      production_number: strProductionNumber,
+      production_number_error: strProductionNumberError,
+      production_number_helper: strProductionNumberHelper,
+      matrix_label: '',
+      matrix_label_error: true,
+      matrix_label_helper: 'Missing matrix label',
       strTestsSummary: 'all',
       uiTestsSelected: astrTests.length,
       astrStati: _astrStati,
@@ -77,20 +89,27 @@ class Interaction extends React.Component {
     });
   };
 
-  handleChange_FirstSerial = () => event => {
-    const val = parseInt(event.target.value);
-    if( isNaN(val)==false && val>=0 )
-    {
-      this.setState({serial_first: val});
-    }
-  };
+  handleChange_MatrixLabel = () => event => {
+    const val = event.target.value;
+    let err = false;
+    let msg = '';
 
-  handleChange_NumberOfBoards = () => event => {
-    const val = parseInt(event.target.value);
-    if( isNaN(val)==false && val>0 )
-    {
-      this.setState({number_of_boards: val});
+    if( val=='' ) {
+      err = true;
+      msg = 'Missing matrix label';
+    } else {
+      if( this.matrix_label_reg.test(val.toLowerCase())==true ) {
+        err = false;
+      } else {
+        err = true;
+        msg = 'Must be 7 digits device number followed by 1 character revision (0-9, a-z) and finally 5 to 6 digits serial number.';
+      }
     }
+    this.setState({
+      matrix_label: val,
+      matrix_label_error: err,
+      matrix_label_helper: msg
+    });
   };
 
   handleTestClick = (uiIndex) => {
@@ -139,16 +158,20 @@ class Interaction extends React.Component {
       atActiveTests.push( (strState=='idle') );
     }, this);
 
-    const tMsg = {
-      serialFirst: this.state.serial_first,
-      numberOfBoards: this.state.number_of_boards,
-      activeTests: atActiveTests,
-      fActivateDebugging: this.state.fActivateDebugging,
-      systemParameter: {
-        production_number: this.state.production_number
-      }
-    };
-    fnSend(tMsg);
+    let astrMatchMatrixLabel = this.state.matrix_label.match(this.matrix_label_reg);
+    if( Array.isArray(astrMatchMatrixLabel)==true ) {
+      const tMsg = {
+        activeTests: atActiveTests,
+        fActivateDebugging: this.state.fActivateDebugging,
+        systemParameter: {
+          production_number: this.state.production_number,
+          devicenr: astrMatchMatrixLabel[1],
+          hwrev: astrMatchMatrixLabel[2],
+          serial: astrMatchMatrixLabel[3]
+        }
+      };
+      fnSend(tMsg);
+    }
   };
 
   render() {
@@ -172,7 +195,7 @@ class Interaction extends React.Component {
               shrink: true,
             }}
             margin="normal"
-            autoFocus
+            autoFocus={this.fHaveLastProductionNumber===false}
             action={
               actions => {
                 this.initialFocus = actions;
@@ -181,12 +204,13 @@ class Interaction extends React.Component {
           />
         </div>
         <div style={{display: 'block', margin: '1em'}}>
-          <TextField
-            id="serial_first"
-            label="First Serial"
-            value={this.state.serial_first}
-            onChange={this.handleChange_FirstSerial()}
-            type="number"
+        <TextField
+            id="matrix_label"
+            label="Matrix Label"
+            value={this.state.matrix_label}
+            onChange={this.handleChange_MatrixLabel()}
+            error={this.state.matrix_label_error}
+            helperText={this.state.matrix_label_helper}
             required={true}
             InputProps={{
               onKeyDown: this.handleKeyDown,
@@ -197,28 +221,14 @@ class Interaction extends React.Component {
               shrink: true,
             }}
             margin="normal"
+            autoFocus={this.fHaveLastProductionNumber===true}
+            action={
+              actions => {
+                this.initialFocus = actions;
+              }
+            }
           />
         </div>
-        <div style={{display: 'block', margin: '1em'}}>
-          <TextField
-            id="number_of_boards"
-            label="Number Of Boards"
-            value={this.state.number_of_boards}
-            onChange={this.handleChange_NumberOfBoards()}
-            type="number"
-            required={true}
-            InputProps={{
-              onKeyDown: this.handleKeyDown,
-              style: { fontSize: '3em' }
-            }}
-            inputRef={ref => this.inputRefs.push(ref)}
-            InputLabelProps={{
-              shrink: true,
-            }}
-            margin="normal"
-          />
-        </div>
-        <Typography variant="subtitle1" gutterBottom>The first serial in the test will be {this.state.serial_first}, the last {this.state.serial_first + this.state.number_of_boards - 1} .</Typography>
 
         <Button
           disabled={this.state.uiTestsSelected===0 || this.state.production_number_error===true}
