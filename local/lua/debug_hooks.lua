@@ -7,10 +7,10 @@ function DebugHooks.init(strTargetIp,uiPortNumb)
   if tResult==true then
 
 	-- start the client with the given IP and port number
-	LuaPanda.start(strTargetIp,uiPortNumb)
+	tLuaPanda.start(strTargetIp,uiPortNumb)
 
 	-- check the connection
-	tResult = LuaPanda.isConnected()
+	tResult = tLuaPanda.isConnected()
 
 	DebugHooks.tLuaPanda = tLuaPanda
 
