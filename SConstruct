@@ -100,10 +100,8 @@ tArcList0.AddFiles('lua/',
 
 tArcList0.AddFiles('jsx/',
     'local/jsx/connect_debugger.jsx',
-    'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
-    'local/jsx/test_failed.jsx',
-    'local/jsx/test_last_board.jsx')
+    'local/jsx/test_failed.jsx')
 
 tArtifact0 = atEnv.DEFAULT.Archive(os.path.join(strModulePath, '%s-%s.zip' % (strArtifact0, PROJECT_VERSION)), None, ARCHIVE_CONTENTS = tArcList0)
 tArtifact0Hash = atEnv.DEFAULT.Hash('%s.hash' % tArtifact0[0].get_path(), tArtifact0[0].get_path(), HASH_ALGORITHM='md5,sha1,sha224,sha256,sha384,sha512', HASH_TEMPLATE='${ID_UC}:${HASH}\n')
@@ -131,10 +129,8 @@ tArcList1.AddFiles('lua/',
 
 tArcList1.AddFiles('jsx/',
     'local/jsx/connect_debugger.jsx',
-    'local/jsx/select_next_serial_and_tests.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
-    'local/jsx/test_failed.jsx',
-    'local/jsx/test_last_board.jsx')
+    'local/jsx/test_failed.jsx')
 
 tArtifact1 = atEnv.DEFAULT.Archive(os.path.join(strModulePath, '%s-%s.zip' % (strArtifact1, PROJECT_VERSION)), None, ARCHIVE_CONTENTS=tArcList1)
 tArtifact1Hash = atEnv.DEFAULT.Hash('%s.hash' % tArtifact1[0].get_path(), tArtifact1[0].get_path(), HASH_ALGORITHM='md5,sha1,sha224,sha256,sha384,sha512', HASH_TEMPLATE='${ID_UC}:${HASH}\n')
