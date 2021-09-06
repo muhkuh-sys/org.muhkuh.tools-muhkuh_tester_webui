@@ -158,15 +158,24 @@ class Interaction extends React.Component {
       atActiveTests.push( (strState=='idle') );
     }, this);
 
-    let astrMatchMatrixLabel = this.state.matrix_label.match(this.matrix_label_reg);
+    let astrMatchMatrixLabel = this.state.matrix_label.toLowerCase().match(this.matrix_label_reg);
     if( Array.isArray(astrMatchMatrixLabel)==true ) {
+      /* The hardware revision starts with the numbers 0-9 and continues for
+       * revision 10 with the letter "a". Convert the letters to a number.
+       */
+      let tHwRev = astrMatchMatrixLabel[2];
+      if( tHwRev>='a' ) {
+        tHwRev = 10 + tHwRev.charCodeAt(0) - 'a'.charCodeAt(0);
+      }
+      tHwRev = parseInt(tHwRev);
+
       const tMsg = {
         activeTests: atActiveTests,
         fActivateDebugging: this.state.fActivateDebugging,
         systemParameter: {
           production_number: this.state.production_number,
           devicenr: astrMatchMatrixLabel[1],
-          hwrev: astrMatchMatrixLabel[2],
+          hwrev: tHwRev,
           serial: astrMatchMatrixLabel[3]
         }
       };
