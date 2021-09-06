@@ -1,14 +1,19 @@
 local DebugHooks = {}
 
-function DebugHooks.init(strTargetIp)
+function DebugHooks.init(strTargetIp,uiPortNumb)
   -- Try to load the remote debugger.
-  local tResult, tMobDebug = pcall(require, 'mobdebug')
-  if tResult==true then
-    tResult = tMobDebug.start(strTargetIp)
+  local tResult, tLuaPanda = pcall(require, 'LuaPanda')
 
-    -- The debugger will stop here.
-    -- Set a breakpoint in the function "run_teststep" to stop before every step.
-    local iDummy = 1
+  if tResult==true then
+
+	-- start the client with the given IP and port number
+	tLuaPanda.start(strTargetIp,uiPortNumb)
+
+	-- check the connection
+	tResult = tLuaPanda.isConnected()
+
+	DebugHooks.tLuaPanda = tLuaPanda
+
   end
 
   return tResult
@@ -17,9 +22,10 @@ end
 
 
 function DebugHooks.run_teststep(tTestInstance, uiTestStep)
-  -- Place a breakpoint here to stop at the start of every test step.
-  local uiDummy = uiTestStep
-
+  -- Hard breakpoint to stop at the start of every test step at this position.
+if DebugHooks.tLuaPanda ~= nil then
+  DebugHooks.tLuaPanda.BP()
+end
   -- Debug into this function call to get to the test code.
   tTestInstance:run()
 end

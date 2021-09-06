@@ -1084,8 +1084,8 @@ function TestSystem:run()
               else
                 pl.pretty.dump(tDebugResult)
                 if tDebugResult.button=='connect' then
-                  tLogSystem.info('Connecting to debug server on %s.', strTargetIp)
-                  local tInitResult = self.debug_hooks.init(strTargetIp)
+                  tLogSystem.info('Connecting to debug server.')
+                  local tInitResult = self.debug_hooks.init(tDebugResult.IP,tDebugResult.Port)
                   tLogSystem.info('Debug init: %s', tostring(tInitResult))
                   if tInitResult==true then
                     fOk = true
