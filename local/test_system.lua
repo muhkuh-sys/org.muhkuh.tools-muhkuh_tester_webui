@@ -985,6 +985,33 @@ function TestSystem:run()
     end
     local strTestNames = table.concat(astrQuotedTests, ', ')
 
+    -- Get the configuration as a lookup table.
+    local atConfigurationParameter = tTestDescription:getConfigurationParameter()
+    local atConfigurationLookup = {}
+    for _, tParameter in ipairs(atConfigurationParameter) do
+      local strName = tParameter.name
+      local strValue = tParameter.value
+      local strOldValue = atConfigurationLookup[strName]
+      if strOldValue==nil then
+        tLogSystem.info('Setting configuration parameter "%s" to "%s".', strName, strValue)
+      else
+        tLogSystem.warning('Replacing configuration parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+      end
+      atConfigurationLookup[strName] = strValue
+    end
+    -- Apply some defaults.
+    local atConfigurationDefaults = {
+      ['LabelValidationFunction'] = 'NONE',
+      ['LabelValidationDataTyp'] = 'STRING',
+      ['LabelValidationData'] = ''
+    }
+    for strName, strValue in pairs(atConfigurationDefaults) do
+      if atConfigurationLookup[strName]==nil then
+        atConfigurationLookup[strName] = strValue
+        tLogSystem.info('Setting default value for configuration parameter "%s" to "%s".', strName, strValue)
+      end
+    end
+
     -- Run the test until a fatal error occured.
     local fTestSystemOk = true
     local strCurrentProductionNumber = ''
@@ -1009,7 +1036,13 @@ function TestSystem:run()
       _G.tester:setSystemParameter(atSystemParameter)
 
       -- Read the first interaction code.
-      tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', { ['TEST_NAMES']=strTestNames, ['LAST_PRODUCTION_NUMBER']=strCurrentProductionNumber })
+      tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', {
+        ['TEST_NAMES'] = strTestNames,
+        ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
+        ['LABEL_VALIDATION_FUNCTION'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
+        ['LABEL_VALIDATION_DATA_TYP'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
+        ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData'])
+      })
       if tResult==nil then
         tLogSystem.fatal('Failed to read interaction.')
         fTestSystemOk = false

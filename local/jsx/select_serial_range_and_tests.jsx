@@ -7,12 +7,54 @@ class Interaction extends React.Component {
     ];
     this.astrTests = astrTests;
 
+    let atPredefinedValidators = new Map();
+    atPredefinedValidators.set('NONE', '');
+    atPredefinedValidators.set('PREFIX-LIST',
+      'const strLabel = arguments[0];\n' +
+      'const tData = arguments[1];\n' +
+      'const fnTest = (strPrefix) => strLabel.startsWith(strPrefix);\n' +
+      'const iIdx = tData.findIndex(fnTest);\n' +
+      'return iIdx!=-1;');
+
+    let strFunctionLabelIsValid = '@LABEL_VALIDATION_FUNCTION@';
+    if( atPredefinedValidators.has(strFunctionLabelIsValid)==true ) {
+      strFunctionLabelIsValid = atPredefinedValidators.get(strFunctionLabelIsValid);
+    }
+
+    let fnLabelIsValid = null;
+    if( strFunctionLabelIsValid!=='' ) {
+      try {
+        fnLabelIsValid = new Function(strFunctionLabelIsValid);
+      } catch (error) {
+        console.error('Failed to parse the label validation function.');
+        fnLabelIsValid = false;
+      }
+    }
+    this.fnLabelIsValid = fnLabelIsValid;
+
+    let strLabelValidationDataTyp = '@LABEL_VALIDATION_DATA_TYP@';
+    strLabelValidationDataTyp = strLabelValidationDataTyp.toUpperCase();
+    const strLabelValidationData = '@LABEL_VALIDATION_DATA@';
+    let tLabelValidationData = null;
+    if( strLabelValidationDataTyp=='JSON' ) {
+      try {
+        tLabelValidationData = JSON.parse(strLabelValidationData);
+      } catch (error) {
+        console.error('Failed to parse the label validation data.');
+      }
+    } else if( strLabelValidationDataTyp=='CSV' ) {
+      tLabelValidationData = strLabelValidationData.split(',').map(strValue => strValue.trim());
+    } else if( strLabelValidationDataTyp=='STRING' ) {
+      tLabelValidationData = strLabelValidationData;
+    }
+    this.tLabelValidationData = tLabelValidationData;
+
     let strProductionNumber = '@LAST_PRODUCTION_NUMBER@';
-    let strProductionNumberError = false;
+    let fProductionNumberError = false;
     let strProductionNumberHelper = '';
     this.fHaveLastProductionNumber = true;
     if( strProductionNumber=='' ) {
-      strProductionNumberError = true;
+      fProductionNumberError = true;
       strProductionNumberHelper = 'Missing production number';
       this.fHaveLastProductionNumber = false;
     }
@@ -29,9 +71,13 @@ class Interaction extends React.Component {
 
     this.inputRefs = [];
 
+    this.ulDeviceNr = null;
+    this.ucHwRev = null;
+    this.ulSerial = null;
+
     this.state = {
       production_number: strProductionNumber,
-      production_number_error: strProductionNumberError,
+      production_number_error: fProductionNumberError,
       production_number_helper: strProductionNumberHelper,
       matrix_label: '',
       matrix_label_error: true,
@@ -39,7 +85,8 @@ class Interaction extends React.Component {
       strTestsSummary: 'all',
       uiTestsSelected: astrTests.length,
       astrStati: _astrStati,
-      fActivateDebugging: false
+      fActivateDebugging: false,
+      fAllowInvalidPnMl: false
     };
   }
 
@@ -50,7 +97,6 @@ class Interaction extends React.Component {
   }
 
   handleKeyDown = e => {
-    console.debug(e);
     const event = e;
     const { currentTarget } = e;
     if( event.key==='Enter' ) {
@@ -98,8 +144,53 @@ class Interaction extends React.Component {
       err = true;
       msg = 'Missing matrix label';
     } else {
-      if( this.matrix_label_reg.test(val.toLowerCase())==true ) {
-        err = false;
+      let strMatrixLabel = val.toLowerCase();
+      let astrMatchMatrixLabel = strMatrixLabel.match(this.matrix_label_reg);
+      if( Array.isArray(astrMatchMatrixLabel)==true ) {
+        /* The hardware revision starts with the numbers 0-9 and continues for
+         * revision 10 with the letter "a". Convert the letters to a number.
+         */
+        let tHwRev = astrMatchMatrixLabel[2];
+        if( tHwRev>='a' ) {
+          tHwRev = 10 + tHwRev.charCodeAt(0) - 'a'.charCodeAt(0);
+        }
+        tHwRev = parseInt(tHwRev);
+
+        this.ulDeviceNr = parseInt(astrMatchMatrixLabel[1]);
+        this.ucHwRev = parseInt(tHwRev);
+        this.ulSerial = parseInt(astrMatchMatrixLabel[3]);
+
+        /* Does a validation function exist? */
+        const fnValidation = this.fnLabelIsValid;
+        const tLabelValidationData = this.tLabelValidationData;
+        if( fnValidation===null ) {
+          /* No validation function means that everything is valid. */
+          err = false;
+          msg = '';
+        } else if( fnValidation===false ) {
+          err = true;
+          msg = 'The label validation function is not correct. This is a configuration problem of the teststation.';
+        } else if( tLabelValidationData==null ) {
+          err = true;
+          msg = 'The label validation data is not correct. This is a configuration problem of the teststation.';
+        } else {
+          /* Check if the matrix label starts with one of the elements of the
+           * valid boards array.
+           */
+          try {
+            const fIsValid = this.fnLabelIsValid(strMatrixLabel, tLabelValidationData);
+            if( fIsValid==true ) {
+              err = false;
+              msg = '';
+            } else {
+              err = true;
+              msg = 'This device is not supported by the test.';
+            }
+          } catch (error) {
+            err = true;
+            msg = 'The validation function crashed!';
+          }
+        }
       } else {
         err = true;
         msg = 'Must be 7 digits device number followed by 1 character revision (0-9, a-z) and finally 5 to 6 digits serial number.';
@@ -150,6 +241,13 @@ class Interaction extends React.Component {
     });
   };
 
+  handleAllowInvalidPnMlClick = () => {
+    const val = !this.state.fAllowInvalidPnMl;
+    this.setState({
+      fAllowInvalidPnMl: val
+    });
+  };
+
   handleStartButton = () => {
     console.log('Start testing.');
 
@@ -158,29 +256,17 @@ class Interaction extends React.Component {
       atActiveTests.push( (strState=='idle') );
     }, this);
 
-    let astrMatchMatrixLabel = this.state.matrix_label.toLowerCase().match(this.matrix_label_reg);
-    if( Array.isArray(astrMatchMatrixLabel)==true ) {
-      /* The hardware revision starts with the numbers 0-9 and continues for
-       * revision 10 with the letter "a". Convert the letters to a number.
-       */
-      let tHwRev = astrMatchMatrixLabel[2];
-      if( tHwRev>='a' ) {
-        tHwRev = 10 + tHwRev.charCodeAt(0) - 'a'.charCodeAt(0);
+    const tMsg = {
+      activeTests: atActiveTests,
+      fActivateDebugging: this.state.fActivateDebugging,
+      systemParameter: {
+        production_number: this.state.production_number,
+        devicenr: this.ulDeviceNr,
+        hwrev: this.ucHwRev,
+        serial: this.ulSerial
       }
-      tHwRev = parseInt(tHwRev);
-
-      const tMsg = {
-        activeTests: atActiveTests,
-        fActivateDebugging: this.state.fActivateDebugging,
-        systemParameter: {
-          production_number: this.state.production_number,
-          devicenr: astrMatchMatrixLabel[1],
-          hwrev: tHwRev,
-          serial: astrMatchMatrixLabel[3]
-        }
-      };
-      fnSend(tMsg);
-    }
+    };
+    fnSend(tMsg);
   };
 
   render() {
@@ -240,7 +326,7 @@ class Interaction extends React.Component {
         </div>
 
         <Button
-          disabled={this.state.uiTestsSelected===0 || this.state.production_number_error===true}
+          disabled={this.state.uiTestsSelected===0 || (this.state.fAllowInvalidPnMl===false && (this.state.production_number_error===true || this.state.matrix_label_error===true))}
           color="primary"
           variant="contained"
           onClick={this.handleStartButton}
@@ -277,7 +363,24 @@ class Interaction extends React.Component {
             <Typography>Advanced options</Typography>
           </ExpansionPanelSummary>
           <ExpansionPanelDetails>
-            <FormControlLabel value="end" label="Activate debugging" control={<Checkbox checked={this.state.fActivateDebugging} onChange={this.handleActivateDebuggingClick} />} />
+            <List>
+              <ListItem key="ActivateDebugging" role={undefined} dense button onClick={() => this.handleActivateDebuggingClick()}>
+                <Checkbox
+                  checked={this.state.fActivateDebugging}
+                  tabIndex={-1}
+                  disableRipple
+                />
+                <ListItemText primary="Activate debugging"/>
+              </ListItem>
+              <ListItem key="AllowInvalidPnMl" role={undefined} dense button onClick={() => this.handleAllowInvalidPnMlClick()}>
+                <Checkbox
+                  checked={this.state.fAllowInvalidPnMl}
+                  tabIndex={-1}
+                  disableRipple
+                />
+                <ListItemText primary="Allow invalid production number and matrix label."/>
+              </ListItem>
+            </List>
           </ExpansionPanelDetails>
         </ExpansionPanel>
       </Paper>
