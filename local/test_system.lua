@@ -1003,7 +1003,8 @@ function TestSystem:run()
     local atConfigurationDefaults = {
       ['LabelValidationFunction'] = 'NONE',
       ['LabelValidationDataTyp'] = 'STRING',
-      ['LabelValidationData'] = ''
+      ['LabelValidationData'] = '',
+      ['AdditionalInputs'] = '{}'
     }
     for strName, strValue in pairs(atConfigurationDefaults) do
       if atConfigurationLookup[strName]==nil then
@@ -1041,7 +1042,8 @@ function TestSystem:run()
         ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
         ['LABEL_VALIDATION_FUNCTION'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
         ['LABEL_VALIDATION_DATA_TYP'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
-        ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData'])
+        ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
+        ['ADDITIONAL_INPUTS'] = self:__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
       })
       if tResult==nil then
         tLogSystem.fatal('Failed to read interaction.')
