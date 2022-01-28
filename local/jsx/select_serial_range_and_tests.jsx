@@ -53,6 +53,37 @@ class Interaction extends React.Component {
     let tAdditionalInputsDefinition = null;
     try {
       tAdditionalInputsDefinition = JSON.parse(strAdditionalInputs);
+
+      const ajv = new Ajv();
+      const tSchemaAdditionalInputs = {
+        items: {
+          properties: {
+            id: {
+              type: "string"
+            },
+            label: {
+              type: "string"
+            },
+            required: {
+              type: "string",
+              enum: ["true", "false"]
+            },
+            regexp: {
+              type: "string"
+            }
+          },
+          type: "object",
+          required: ["id", "label"],
+          additionalProperties: false
+        },
+        type: "array"
+      };
+      const fnValidateAdditionalInputs = ajv.compile(tSchemaAdditionalInputs);
+      const fValidAdditionalInputs = fnValidateAdditionalInputs(tAdditionalInputsDefinition);
+      if( !fValidAdditionalInputs ) {
+        console.error('AdditionalInputs are invalid!');
+        tAdditionalInputsDefinition = null;
+      }
     } catch (error) {
       console.error('Failed to parse the additional inputs definition.');
       console.error('Input data: "' + strAdditionalInputs + '"');
