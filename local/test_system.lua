@@ -1060,7 +1060,7 @@ function TestSystem:run()
         pl.pretty.dump(tJson)
         _G.tester:sendLogEvent('muhkuh.test.start', {
           package = tPackageInfo,
-          selection = tJson
+          selection = tJson.activeTests
         })
 
         self.m_atTestExecutionParameter = tJson
