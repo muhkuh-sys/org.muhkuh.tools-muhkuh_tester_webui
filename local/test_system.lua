@@ -1057,6 +1057,8 @@ function TestSystem:run()
           pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
         end
 
+        self:sendTestRunStart()
+
         pl.pretty.dump(tJson)
         _G.tester:sendLogEvent('muhkuh.test.start', {
           package = tPackageInfo,
@@ -1118,7 +1120,6 @@ function TestSystem:run()
         local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
         self:sendCurrentSerial(ulSerialCurrent)
 
-        self:sendTestRunStart()
         tLogSystem.info('Testing serial %d .', ulSerialCurrent)
 
         tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
