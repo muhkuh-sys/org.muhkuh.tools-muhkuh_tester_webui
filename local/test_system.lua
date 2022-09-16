@@ -860,8 +860,12 @@ function TestSystem:run_tests(atModules, tTestDescription)
     }
     _G.tester:sendLogEvent('muhkuh.test.result', tEventTestResult)
 
-    -- Close the connection to the netX.
-    _G.tester:closeCommonPlugin()
+    -- Close all connections to the netX.
+    if _G.tester.closeAllCommonPlugins~=nil then
+      _G.tester:closeAllCommonPlugins()
+    else
+      _G.tester:closeCommonPlugin()
+    end
 
     -- HACK: the post action needs to know if the board should be finalized or
     --       trashed. Just add a global which can be used in the post action.
