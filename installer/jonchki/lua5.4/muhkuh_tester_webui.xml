@@ -15,6 +15,7 @@
 		<dependency group="com.github.zeromq" module="lzmq" artifact="lua5.4-lzmq" version="0"/>
 		<dependency group="com.github.lunarmodules" module="luaexpat" artifact="lua5.4-luaexpat" version="1"/>
 		<dependency group="com.github.Tencent" module="LuaPanda" artifact="LuaPanda" version="3"/>
-		<dependency group="org.muhkuh.tools" module="muhkuh_tester_asciidoc" artifact="muhkuh_tester_asciidoc" version="0.0"/>
+		<dependency group="org.muhkuh.tools" module="muhkuh_tester_asciidoc" artifact="muhkuh_tester_asciidoc" version="0"/>
+		<dependency group="org.muhkuh.tools" module="muhkuh_tester_base" artifact="muhkuh_tester_base" version="0"/>
 	</dependencies>
 </jonchki-artifact>
