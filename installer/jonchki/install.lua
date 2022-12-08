@@ -1,13 +1,14 @@
 local t = ...
 
 
-local tPostTriggerAction = {}
+----------------------------------------------------------------------------------------------------------------------
+--
+-- ActionTestInstaller
+--
 
-
-function tPostTriggerAction:run(tInstallHelper)
+local function actionTestInstaller(tInstallHelper)
   local tResult
   local pl = tInstallHelper.pl
-  self.pl = pl
   local tLog = tInstallHelper.tLog
 
   local strTestsFile = 'tests.xml'
@@ -79,8 +80,8 @@ function tPostTriggerAction:run(tInstallHelper)
                 else
                   -- Parse the install script.
                   local strInstallScript = tFileResult
-                  local loadstring = loadstring or load
-                  tResult, strError = loadstring(strInstallScript, strInstallScriptPath)
+                  local _loadstring = loadstring or load
+                  tResult, strError = _loadstring(strInstallScript, strInstallScriptPath)
                   if tResult==nil then
                     tResult = nil
                     tLog.error('Failed to parse the test case install script "%s": %s', strInstallScriptPath, strError)
@@ -168,6 +169,9 @@ function tPostTriggerAction:run(tInstallHelper)
 end
 
 
+
+----------------------------------------------------------------------------------------------------------------------
+
 local tResult = true
 
 -- Copy the test system to the root folder.
@@ -182,7 +186,9 @@ t:install('jsx/', '${install_base}/jsx')
 -- Copy the complete "doc" folder.
 --t:install('doc/', '${install_doc}/')
 
--- Register a new post trigger action.
-t:register_post_trigger(tPostTriggerAction.run, tPostTriggerAction, 50)
+-- Register the action for the test installer.
+-- It should run before actions with a default level of 50.
+t:register_action('install_testcases', actionTestInstaller, t, '${prj_root}', 40)
+
 
 return tResult
