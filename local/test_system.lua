@@ -443,7 +443,12 @@ function TestSystem:run_action(strAction)
             strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strMsg)
           else
             -- Run the LUA chunk.
-            local fStatus, tResult = xpcall(tChunk, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+            if self.LUA_VER_NUM==501 then
+              fStatus, tResult = xpcall(function() tChunk(tLogSystem) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+            else
+              fStatus, tResult = xpcall(tChunk, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tLogSystem)
+            end
+
             if fStatus==true then
               tActionResult = tResult
             else
