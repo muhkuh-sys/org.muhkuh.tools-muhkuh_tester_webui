@@ -12,7 +12,7 @@ class Interaction extends React.Component {
     atPredefinedValidators.set('PREFIX-LIST',
       'const strLabel = arguments[0];\n' +
       'const tData = arguments[1];\n' +
-      'const fnTest = (strPrefix) => strLabel.startsWith(strPrefix);\n' +
+      'const fnTest = (strPrefix) => strLabel.toLowerCase().startsWith(strPrefix.toLowerCase());\n' +
       'const iIdx = tData.findIndex(fnTest);\n' +
       'return iIdx!=-1;');
 
