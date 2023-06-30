@@ -1013,7 +1013,8 @@ function TestSystem:run()
       ['LabelValidationFunction'] = 'NONE',
       ['LabelValidationDataTyp'] = 'STRING',
       ['LabelValidationData'] = '',
-      ['AdditionalInputs'] = '{}'
+      ['AdditionalInputs'] = '{}',
+      ['DataProvider'] = '[]'
     }
     for strName, strValue in pairs(atConfigurationDefaults) do
       if atConfigurationLookup[strName]==nil then
@@ -1022,147 +1023,155 @@ function TestSystem:run()
       end
     end
 
-    -- Run the test until a fatal error occured.
-    local fTestSystemOk = true
-    local strCurrentProductionNumber = ''
-    repeat
-      -- Create all system parameter.
-      local atSystemParameter = {}
-      local tSystemParameter = tTestDescription:getSystemParameter()
-      if tSystemParameter~=nil then
-        for _, tParameter in ipairs(tSystemParameter) do
-          local strName = tParameter.name
-          local strValue = tParameter.value
-          local strOldValue = atSystemParameter[strName]
-          if strOldValue==nil then
-            tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
-          else
-            tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+    -- Parse the configuration and assign it to the tester.
+    local tDataProviderConfiguration, strDataProviderError = self.json.decode(atConfigurationLookup.DataProvider)
+    if tDataProviderConfiguration==nil then
+      tLogSystem.fatal('Failed to parse the data provider configuration: ' .. tostring(strDataProviderError))
+    else
+      _G.tester:setDataProviderConfiguration(tDataProviderConfiguration, self.tLogWriterFn, self.strLogLevel)
+
+      -- Run the test until a fatal error occured.
+      local fTestSystemOk = true
+      local strCurrentProductionNumber = ''
+      repeat
+        -- Create all system parameter.
+        local atSystemParameter = {}
+        local tSystemParameter = tTestDescription:getSystemParameter()
+        if tSystemParameter~=nil then
+          for _, tParameter in ipairs(tSystemParameter) do
+            local strName = tParameter.name
+            local strValue = tParameter.value
+            local strOldValue = atSystemParameter[strName]
+            if strOldValue==nil then
+              tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
+            else
+              tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+            end
+            atSystemParameter[strName] = strValue
           end
-          atSystemParameter[strName] = strValue
         end
-      end
-      self.m_atSystemParameter = atSystemParameter
-      _G.tester:setSystemParameter(atSystemParameter)
+        self.m_atSystemParameter = atSystemParameter
+        _G.tester:setSystemParameter(atSystemParameter)
 
-      -- Read the first interaction code.
-      tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', {
-        ['TEST_NAMES'] = strTestNames,
-        ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
-        ['LABEL_VALIDATION_FUNCTION'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
-        ['LABEL_VALIDATION_DATA_TYP'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
-        ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
-        ['ADDITIONAL_INPUTS'] = self:__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
-      })
-      if tResult==nil then
-        tLogSystem.fatal('Failed to read interaction.')
-        fTestSystemOk = false
-      else
-        local tJson = tResult
-
-        -- Add the system parameter from the dialog.
-        local tAdditionalSystemParameter = tJson.systemParameter
-        if tAdditionalSystemParameter~=nil then
-          pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
-        end
-
-        self:sendTestRunStart()
-
-        pl.pretty.dump(tJson)
-        _G.tester:sendLogEvent('muhkuh.test.start', {
-          package = tPackageInfo,
-          selection = tJson.activeTests
+        -- Read the first interaction code.
+        tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', {
+          ['TEST_NAMES'] = strTestNames,
+          ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
+          ['LABEL_VALIDATION_FUNCTION'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
+          ['LABEL_VALIDATION_DATA_TYP'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
+          ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
+          ['ADDITIONAL_INPUTS'] = self:__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
         })
+        if tResult==nil then
+          tLogSystem.fatal('Failed to read interaction.')
+          fTestSystemOk = false
+        else
+          local tJson = tResult
 
-        self.m_atTestExecutionParameter = tJson
-        _G.tester:clearInteraction()
+          -- Add the system parameter from the dialog.
+          local tAdditionalSystemParameter = tJson.systemParameter
+          if tAdditionalSystemParameter~=nil then
+            pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
+          end
 
-        -- Remember the production number for the next run.
-        strCurrentProductionNumber = self.m_atSystemParameter.production_number
+          self:sendTestRunStart()
 
-        if tJson.fActivateDebugging==true then
-          local strTargetIp = _G.tester:getCurrentPeerName()
-          if strTargetIp=='' then
-            tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
-          else
-            tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+          pl.pretty.dump(tJson)
+          _G.tester:sendLogEvent('muhkuh.test.start', {
+            package = tPackageInfo,
+            selection = tJson.activeTests
+          })
 
-            local fAgain = false
-            local fOk = false
-            repeat
-              local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
-              if tDebugResult==nil then
-                tLogSystem.fatal('Failed to read interaction.')
-                break
-              else
-                pl.pretty.dump(tDebugResult)
-                if tDebugResult.button=='connect' then
-                  tLogSystem.info('Connecting to debug server.')
-                  local tInitResult = self.debug_hooks.init(tDebugResult.IP,tDebugResult.Port)
-                  tLogSystem.info('Debug init: %s', tostring(tInitResult))
-                  if tInitResult==true then
+          self.m_atTestExecutionParameter = tJson
+          _G.tester:clearInteraction()
+
+          -- Remember the production number for the next run.
+          strCurrentProductionNumber = self.m_atSystemParameter.production_number
+
+          if tJson.fActivateDebugging==true then
+            local strTargetIp = _G.tester:getCurrentPeerName()
+            if strTargetIp=='' then
+              tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
+            else
+              tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+
+              local fAgain = false
+              local fOk = false
+              repeat
+                local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
+                if tDebugResult==nil then
+                  tLogSystem.fatal('Failed to read interaction.')
+                  break
+                else
+                  pl.pretty.dump(tDebugResult)
+                  if tDebugResult.button=='connect' then
+                    tLogSystem.info('Connecting to debug server.')
+                    local tInitResult = self.debug_hooks.init(tDebugResult.IP,tDebugResult.Port)
+                    tLogSystem.info('Debug init: %s', tostring(tInitResult))
+                    if tInitResult==true then
+                      fOk = true
+                    else
+                      fOk = false
+                      fAgain = true
+                    end
+                  elseif tDebugResult.button=='cancel' then
                     fOk = true
                   else
                     fOk = false
-                    fAgain = true
                   end
-                elseif tDebugResult.button=='cancel' then
-                  fOk = true
-                else
-                  fOk = false
                 end
-              end
-            until fOk==true
+              until fOk==true
 
-            _G.tester:clearInteraction()
+              _G.tester:clearInteraction()
+            end
           end
-        end
 
-        -- Build the initial test states.
-        local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+          -- Build the initial test states.
+          local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
 
-        -- Set the test names and stati.
-        self:sendTestNames(tTestDescription:getTestNames())
-        self:sendTestStati(astrStati)
+          -- Set the test names and stati.
+          self:sendTestNames(tTestDescription:getTestNames())
+          self:sendTestStati(astrStati)
 
-        -- Get the current serial number.
-        local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
-        self:sendCurrentSerial(ulSerialCurrent)
+          -- Get the current serial number.
+          local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
+          self:sendCurrentSerial(ulSerialCurrent)
 
-        tLogSystem.info('Testing serial %d .', ulSerialCurrent)
+          tLogSystem.info('Testing serial %d .', ulSerialCurrent)
 
-        tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
-        if tResult==nil then
-          tLogSystem.fatal('Failed to collect all test cases.')
-          fTestSystemOk = false
-        else
-          local atModules = tResult
-
-          tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
+          tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
           if tResult==nil then
-            tLogSystem.fatal('Failed to apply the parameters.')
+            tLogSystem.fatal('Failed to collect all test cases.')
             fTestSystemOk = false
           else
-            tResult = self:check_parameters(atModules, tTestDescription)
+            local atModules = tResult
+
+            tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
             if tResult==nil then
-              tLogSystem.fatal('Failed to check the parameters.')
+              tLogSystem.fatal('Failed to apply the parameters.')
               fTestSystemOk = false
             else
-              tResult = self:run_tests(atModules, tTestDescription)
-              if tResult~=true then
-                break
+              tResult = self:check_parameters(atModules, tTestDescription)
+              if tResult==nil then
+                tLogSystem.fatal('Failed to check the parameters.')
+                fTestSystemOk = false
+              else
+                tResult = self:run_tests(atModules, tTestDescription)
+                if tResult~=true then
+                  break
+                end
               end
             end
           end
+
+          self:sendTestRunFinished()
+
+          -- Reset all test stati to idle or disabled.
+          local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+          self:sendTestStati(astrStati)
         end
-
-        self:sendTestRunFinished()
-
-        -- Reset all test stati to idle or disabled.
-        local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-        self:sendTestStati(astrStati)
-      end
-    until fTestSystemOk~=true
+      until fTestSystemOk~=true
+    end
   end
 end
 
