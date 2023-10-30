@@ -449,6 +449,8 @@ class Interaction extends React.Component {
       }, this);
     }
 
+    const bEnricoMode = fnGetEnricoMode();
+
     return (
       <Paper style={{padding: '1em'}}>
         <div style={{display: 'block', margin: '1em'}}>
@@ -518,7 +520,7 @@ class Interaction extends React.Component {
           Start testing
         </Button>
 
-        <ExpansionPanel style={{margin: '1em'}}>
+        <ExpansionPanel style={{margin: '1em'}} disabled={!bEnricoMode}>
           <ExpansionPanelSummary expandIcon={<SvgIcon><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/><path d="M0 0h24v24H0z" fill="none"/></SvgIcon>}>
             <Typography>Selected tests: {this.state.strTestsSummary}</Typography>
           </ExpansionPanelSummary>
@@ -538,7 +540,7 @@ class Interaction extends React.Component {
           </ExpansionPanelDetails>
         </ExpansionPanel>
 
-        <ExpansionPanel style={{margin: '1em'}}>
+        <ExpansionPanel style={{margin: '1em'}} disabled={!bEnricoMode}>
           <ExpansionPanelSummary expandIcon={<SvgIcon><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/><path d="M0 0h24v24H0z" fill="none"/></SvgIcon>}>
             <Typography>Advanced options</Typography>
           </ExpansionPanelSummary>
