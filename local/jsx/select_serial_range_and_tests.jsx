@@ -103,10 +103,16 @@ class Interaction extends React.Component {
       this.fHaveLastProductionNumber = false;
     }
 
-    let _astrStati = [];
-    astrTests.forEach(function(strTest, uiIndex) {
-      _astrStati.push('idle');
-    });
+    // The function "fnGetTestStati" returns the test stati of the previous run.
+    // If this is the first run, it returns an empty array. Set all tests to "idle"
+    // in this case.
+    let _astrStati = fnGetTestStati();
+    if( _astrStati.length!==astrTests.length ) {
+      _astrStati = [];
+      astrTests.forEach(function(strTest, uiIndex) {
+        _astrStati.push('idle');
+      });
+    }
 
     let _atRegExp = {}
     _atRegExp.production_number = new RegExp('^F[0-9]{6}$');
