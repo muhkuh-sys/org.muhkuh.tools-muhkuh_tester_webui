@@ -127,67 +127,70 @@ class Interaction extends React.Component {
     let _atLabels = {};
     this.atLabels = _atLabels;
 
-    let _tState = {}
-    /* Add the additional inputs first, so they can not overwrite any standard keys. */
-    if( tAdditionalInputsDefinition!=null ) {
-      tAdditionalInputsDefinition.forEach(function(tInput, uiIndex) {
-        let strId = tInput.id;
+    let _tState = fnGetPersistentState();
+    if( _tState===null ) {
+      _tState = {};
+      /* Add the additional inputs first, so they can not overwrite any standard keys. */
+      if( tAdditionalInputsDefinition!=null ) {
+        tAdditionalInputsDefinition.forEach(function(tInput, uiIndex) {
+          let strId = tInput.id;
 
-        let strLabel = tInput.label;
-        _atLabels[strId] = strLabel;
+          let strLabel = tInput.label;
+          _atLabels[strId] = strLabel;
 
-        let tReg = null;
-        if( 'regexp' in tInput ) {
-          tReg = new RegExp(tInput.regexp);
-          _atRegExp[strId] = tReg;
-        }
-
-        let tRequired = false;
-        if( 'required' in tInput ) {
-          let strRequired = String(tInput.required).toUpperCase();
-          if( strRequired=="TRUE" || strRequired=="1" ) {
-            tRequired = true;
+          let tReg = null;
+          if( 'regexp' in tInput ) {
+            tReg = new RegExp(tInput.regexp);
+            _atRegExp[strId] = tReg;
           }
-        }
-        _atRequired[strId] = tRequired;
 
-        let strDefault = '';
-        if( 'default' in tInput ) {
-          strDefault = tInput.default;
-        }
+          let tRequired = false;
+          if( 'required' in tInput ) {
+            let strRequired = String(tInput.required).toUpperCase();
+            if( strRequired=="TRUE" || strRequired=="1" ) {
+              tRequired = true;
+            }
+          }
+          _atRequired[strId] = tRequired;
 
-        let fError = false;
-        let strHelper = '';
-        if( strDefault=='' ) {
-          if( tRequired==true ) {
-            fError = true;
-            strHelper = 'Missing value.';
+          let strDefault = '';
+          if( 'default' in tInput ) {
+            strDefault = tInput.default;
           }
-        } else if( tReg!=null ) {
-          if( tReg.test(strDefault)==true ) {
-            fError = false;
-          } else {
-            fError = true;
-            strHelper = 'The input is invalid.';
+
+          let fError = false;
+          let strHelper = '';
+          if( strDefault=='' ) {
+            if( tRequired==true ) {
+              fError = true;
+              strHelper = 'Missing value.';
+            }
+          } else if( tReg!=null ) {
+            if( tReg.test(strDefault)==true ) {
+              fError = false;
+            } else {
+              fError = true;
+              strHelper = 'The input is invalid.';
+            }
           }
-        }
-        _tState[strId+'_value'] = strDefault;
-        _tState[strId+'_error'] = fError;
-        _tState[strId+'_helper'] = strHelper;
-      });
+          _tState[strId+'_value'] = strDefault;
+          _tState[strId+'_error'] = fError;
+          _tState[strId+'_helper'] = strHelper;
+        });
+      }
+
+      _tState.production_number_value = strProductionNumber;
+      _tState.production_number_error = fProductionNumberError;
+      _tState.production_number_helper = strProductionNumberHelper;
+      _tState.matrix_label_value = '';
+      _tState.matrix_label_error = true;
+      _tState.matrix_label_helper = 'Missing matrix label';
+      _tState.strTestsSummary = 'all';
+      _tState.uiTestsSelected = astrTests.length;
+      _tState.astrStati = _astrStati;
+      _tState.fActivateDebugging = false;
+      _tState.fAllowInvalidPnMl = false;
     }
-
-    _tState.production_number_value = strProductionNumber;
-    _tState.production_number_error = fProductionNumberError;
-    _tState.production_number_helper = strProductionNumberHelper;
-    _tState.matrix_label_value = '';
-    _tState.matrix_label_error = true;
-    _tState.matrix_label_helper = 'Missing matrix label';
-    _tState.strTestsSummary = 'all';
-    _tState.uiTestsSelected = astrTests.length;
-    _tState.astrStati = _astrStati;
-    _tState.fActivateDebugging = false;
-    _tState.fAllowInvalidPnMl = false;
 
     this.state = _tState;
   }
@@ -231,11 +234,14 @@ class Interaction extends React.Component {
         msg = 'Must be "F" followed by 6 numbers.';
       }
     }
-    this.setState({
-      production_number_value: val,
-      production_number_error: err,
-      production_number_helper: msg
-    });
+    this.setState(
+      {
+        production_number_value: val,
+        production_number_error: err,
+        production_number_helper: msg
+      },
+      fnPersistState
+    );
   };
 
   handleChange_MatrixLabel = () => event => {
@@ -300,11 +306,14 @@ class Interaction extends React.Component {
         msg = 'Must be 7 digits device number followed by 1 character revision (0-9, a-z) and finally 5 to 6 digits serial number.';
       }
     }
-    this.setState({
-      matrix_label_value: val,
-      matrix_label_error: err,
-      matrix_label_helper: msg
-    });
+    this.setState(
+      {
+        matrix_label_value: val,
+        matrix_label_error: err,
+        matrix_label_helper: msg
+      },
+      fnPersistState
+    );
   };
 
   handleChange_additional = (strId) => event => {
@@ -333,11 +342,10 @@ class Interaction extends React.Component {
     tUpdate[strId+'_value'] = val;
     tUpdate[strId+'_error'] = err;
     tUpdate[strId+'_helper'] = msg;
-    this.setState(tUpdate);
+    this.setState(tUpdate, fnPersistState);
   };
 
   handleTestClick = (uiIndex) => {
-    console.log('Click', uiIndex);
     let _astrStati = this.state.astrStati.slice();
     let strState = _astrStati[uiIndex];
     if( strState=='disabled' ) {
@@ -360,30 +368,37 @@ class Interaction extends React.Component {
     } else if( uiAll>uiActive ) {
       strSummary = String(uiActive) + ' / ' + String(uiAll);
     }
-    this.setState({
-      strTestsSummary: strSummary,
-      astrStati: _astrStati,
-      uiTestsSelected: uiActive
-    });
+    this.setState(
+      {
+        strTestsSummary: strSummary,
+        astrStati: _astrStati,
+        uiTestsSelected: uiActive
+      },
+      fnPersistState
+    );
   };
 
   handleActivateDebuggingClick = () => {
     const val = !this.state.fActivateDebugging;
-    this.setState({
-      fActivateDebugging: val
-    });
+    this.setState(
+      {
+        fActivateDebugging: val
+      },
+      fnPersistState
+    );
   };
 
   handleAllowInvalidPnMlClick = () => {
     const val = !this.state.fAllowInvalidPnMl;
-    this.setState({
-      fAllowInvalidPnMl: val
-    });
+    this.setState(
+      {
+        fAllowInvalidPnMl: val
+      },
+      fnPersistState
+    );
   };
 
   handleStartButton = () => {
-    console.log('Start testing.');
-
     let atActiveTests = [];
     this.state.astrStati.forEach(function(strState, uiIndex) {
       atActiveTests.push( (strState=='idle') );
