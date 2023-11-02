@@ -194,6 +194,7 @@ class Interaction extends React.Component {
       _tState.strTestsSummary = 'all';
       _tState.uiTestsSelected = astrTests.length;
       _tState.astrStati = _astrStati;
+      _tState.fDisableLogging = false;
       _tState.fActivateDebugging = false;
       _tState.fAllowInvalidPnMl = false;
     }
@@ -384,6 +385,16 @@ class Interaction extends React.Component {
     );
   };
 
+  handleDisableLoggingClick = () => {
+    const val = !this.state.fDisableLogging;
+    this.setState(
+      {
+        fDisableLogging: val
+      },
+      fnPersistState
+    );
+  };
+
   handleActivateDebuggingClick = () => {
     const val = !this.state.fActivateDebugging;
     this.setState(
@@ -428,6 +439,7 @@ class Interaction extends React.Component {
 
     const tMsg = {
       activeTests: atActiveTests,
+      fDisableLogging: this.state.fDisableLogging,
       fActivateDebugging: this.state.fActivateDebugging,
       systemParameter: tSystemParameter
     };
@@ -567,6 +579,14 @@ class Interaction extends React.Component {
           </ExpansionPanelSummary>
           <ExpansionPanelDetails>
             <List>
+              <ListItem key="DisableLogging" role={undefined} dense button onClick={() => this.handleDisableLoggingClick()}>
+                <Checkbox
+                  checked={this.state.fDisableLogging}
+                  tabIndex={-1}
+                  disableRipple
+                />
+                <ListItemText primary="Do not send log messages to the database."/>
+              </ListItem>
               <ListItem key="ActivateDebugging" role={undefined} dense button onClick={() => this.handleActivateDebuggingClick()}>
                 <Checkbox
                   checked={this.state.fActivateDebugging}

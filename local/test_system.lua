@@ -191,6 +191,16 @@ end
 
 
 
+function TestSystem:sendDisableLogging(fDisableLogging)
+  local tData = {
+    fDisableLogging = (fDisableLogging == true)
+  }
+  local strJson = self.json.encode(tData)
+  self.m_zmqSocket:send('DLO'..strJson)
+end
+
+
+
 function TestSystem:load_test_module(uiTestIndex)
   local tLogSystem = self.tLogSystem
 
@@ -1087,6 +1097,8 @@ function TestSystem:run()
 
           -- Remember the production number for the next run.
           strCurrentProductionNumber = self.m_atSystemParameter.production_number
+
+          self:sendDisableLogging(tJson.fDisableLogging)
 
           if tJson.fActivateDebugging==true then
             local strTargetIp = _G.tester:getCurrentPeerName()
