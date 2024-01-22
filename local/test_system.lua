@@ -999,10 +999,16 @@ function TestSystem:run()
     local astrTestNames = tTestDescription:getTestNames()
     -- Get all test names in the style of a table.
     local astrQuotedTests = {}
+    local abInitialStates = {}
     for _, strName in ipairs(astrTestNames) do
       table.insert(astrQuotedTests, string.format('"%s"', strName))
+      table.insert(abInitialStates, true)
     end
     local strTestNames = table.concat(astrQuotedTests, ', ')
+
+    self:sendTestNames(astrTestNames)
+    local astrStati = self:__updateTestStati(abInitialStates)
+    self:sendTestStati(astrStati)
 
     -- Get the configuration as a lookup table.
     local atConfigurationParameter = tTestDescription:getConfigurationParameter()
@@ -1138,11 +1144,8 @@ function TestSystem:run()
             end
           end
 
-          -- Build the initial test states.
+          -- Update the test stati.
           local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-
-          -- Set the test names and stati.
-          self:sendTestNames(tTestDescription:getTestNames())
           self:sendTestStati(astrStati)
 
           -- Get the current serial number.
