@@ -104,8 +104,8 @@ class Interaction extends React.Component {
     }
 
     // The function "fnGetTestStati" returns the test stati of the previous run.
-    // If this is the first run, it returns an empty array. Set all tests to "idle"
-    // in this case.
+    // If this is the first run on an old tester, it returns an empty array.
+    // Set all tests to "idle" in this case.
     let _astrStati = fnGetTestStati();
     if( _astrStati.length!==astrTests.length ) {
       _astrStati = [];
@@ -361,6 +361,7 @@ class Interaction extends React.Component {
       strState = 'disabled';
     }
     _astrStati[uiIndex] = strState;
+    fnSetLocalTestState(uiIndex, strState);
 
     let uiActive = 0;
     _astrStati.forEach(function(strState, uiIndex) {
