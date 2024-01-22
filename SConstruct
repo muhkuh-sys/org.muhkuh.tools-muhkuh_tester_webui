@@ -100,6 +100,7 @@ tArcList0.AddFiles('lua/',
 
 tArcList0.AddFiles('jsx/',
     'local/jsx/connect_debugger.jsx',
+    'local/jsx/fatal_system_error.jsx',
     'local/jsx/select_serial_range_and_tests.jsx',
     'local/jsx/test_failed.jsx')
 

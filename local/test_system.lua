@@ -1049,6 +1049,7 @@ function TestSystem:run()
       -- Run the test until a fatal error occured.
       local fTestSystemOk = true
       local strCurrentProductionNumber = ''
+      local strSystemErrorMessage
       repeat
         -- Create all system parameter.
         local atSystemParameter = {}
@@ -1079,7 +1080,7 @@ function TestSystem:run()
           ['ADDITIONAL_INPUTS'] = self:__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
         })
         if tResult==nil then
-          tLogSystem.fatal('Failed to read interaction.')
+          strSystemErrorMessage = 'Failed to set the interaction to select the serial range and tests.'
           fTestSystemOk = false
         else
           local tJson = tResult
@@ -1156,19 +1157,19 @@ function TestSystem:run()
 
           tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
           if tResult==nil then
-            tLogSystem.fatal('Failed to collect all test cases.')
+            strSystemErrorMessage = 'Failed to collect all test cases.'
             fTestSystemOk = false
           else
             local atModules = tResult
 
             tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
             if tResult==nil then
-              tLogSystem.fatal('Failed to apply the parameters.')
+              strSystemErrorMessage = 'Failed to apply the parameters.'
               fTestSystemOk = false
             else
               tResult = self:check_parameters(atModules, tTestDescription)
               if tResult==nil then
-                tLogSystem.fatal('Failed to check the parameters.')
+                strSystemErrorMessage = 'Failed to check the parameters.'
                 fTestSystemOk = false
               else
                 tResult = self:run_tests(atModules, tTestDescription)
@@ -1186,6 +1187,15 @@ function TestSystem:run()
           self:sendTestStati(astrStati)
         end
       until fTestSystemOk~=true
+
+      -- Show an error message.
+      if strSystemErrorMessage==nil then
+        strSystemErrorMessage = 'No message.'
+      end
+      tLogSystem.fatal(strSystemErrorMessage)
+      _G.tester:setInteractionGetJson('jsx/fatal_system_error.jsx', {
+        ['ERROR_MESSAGE'] = strSystemErrorMessage
+      })
     end
   end
 end
