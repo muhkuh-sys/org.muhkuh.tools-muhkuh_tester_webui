@@ -35,7 +35,7 @@ end
 
 
 
-function TestSystem:__quote_with_ticks(strInput)
+function TestSystem.__quote_with_ticks(strInput)
   local s = string.gsub(strInput, "'", "\\'")
   s = string.gsub(s, "\n", "\\n")
   return s
@@ -80,9 +80,9 @@ function TestSystem:createLogger()
 
   ------------------------------------------------------------------------------
   -- Now create the logger. It sends the data to the ZMQ socket.
-  -- It does not use the formatter function 'fmt' or the date 'now'. This is
-  -- done at the server side.
-  local tLogWriterFn = function(fmt, msg, lvl, now)
+  -- It does not use the formatter function 'fmt' (1st argument) or the date
+  -- 'now' (4th argument). This is done at the server side.
+  local tLogWriterFn = function(_, msg, lvl, _)
     m_zmqSocket:send(string.format('LOG%d,%s', lvl, msg))
   end
   self.tLogWriterFn = tLogWriterFn
@@ -224,7 +224,11 @@ function TestSystem:collect_testcases(tTestDescription, aActiveTests)
   local uiTestsFromGui = #aActiveTests
   -- Both test counts must match or there is something wrong.
   if uiNumberOfTests~=uiTestsFromGui then
-    tLogSystem.error('The test description specifies %d tests, but the selection covers %d tests.', uiNumberOfTests, uiTestsFromGui)
+    tLogSystem.error(
+      'The test description specifies %d tests, but the selection covers %d tests.',
+      uiNumberOfTests,
+      uiTestsFromGui
+    )
   else
     local aModules = {}
     local astrTestNames = tTestDescription:getTestNames()
@@ -267,7 +271,7 @@ end
 
 
 
-function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
+function TestSystem:apply_parameters(atModules, tTestDescription, _)
   local tLogSystem = self.tLogSystem
   local tResult = true
 
@@ -295,12 +299,22 @@ function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
         -- Does the parameter exist?
         tParameter = atParametersModule[strParameterName]
         if tParameter==nil then
-          tLogSystem.fatal('The parameter "%s" does not exist in test case %d (%s).', strParameterName, uiTestIndex, strTestCaseName)
+          tLogSystem.fatal(
+            'The parameter "%s" does not exist in test case %d (%s).',
+            strParameterName,
+            uiTestIndex,
+            strTestCaseName
+          )
           tResult = nil
           break
         -- Is the parameter an "output"?
         elseif tParameter.fIsOutput==true then
-          self.tLogSystem.fatal('The parameter "%s" in test case %d (%s) is an output.', strParameterName, uiTestIndex, strTestCaseName)
+          self.tLogSystem.fatal(
+            'The parameter "%s" in test case %d (%s) is an output.',
+            strParameterName,
+            uiTestIndex,
+            strTestCaseName
+          )
           tResult = nil
           break
         else
@@ -311,7 +325,12 @@ function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
             -- This is a connection to another value or an output parameter.
             local strClass, strName = string.match(strParameterConnection, '^([^:]+):(.+)')
             if strClass==nil then
-              tLogSystem.fatal('Parameter "%s" of test %d has an invalid connection "%s".', strParameterName, uiTestIndex, strParameterConnection)
+              tLogSystem.fatal(
+                'Parameter "%s" of test %d has an invalid connection "%s".',
+                strParameterName,
+                uiTestIndex,
+                strParameterConnection
+              )
               tResult = nil
               break
             else
@@ -319,7 +338,10 @@ function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
               if strClass=='system' then
                 local tValue = self.m_atSystemParameter[strName]
                 if tValue==nil then
-                  tLogSystem.fatal('The connection target "%s" has an unknown name.', strParameterConnection)
+                  tLogSystem.fatal(
+                    'The connection target "%s" has an unknown name.',
+                    strParameterConnection
+                  )
                   tResult = nil
                   break
                 else
@@ -333,7 +355,11 @@ function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
                   -- The class is no number. Search the name.
                   uiConnectionTargetTestCase = tTestDescription:getTestCaseIndex(strClass)
                   if uiConnectionTargetTestCase==nil then
-                    tLogSystem.fatal('The connection "%s" uses an unknown test name: "%s".', strParameterConnection, strClass)
+                    tLogSystem.fatal(
+                      'The connection "%s" uses an unknown test name: "%s".',
+                      strParameterConnection,
+                      strClass
+                    )
                     tResult = nil
                     break
                   end
@@ -342,18 +368,32 @@ function TestSystem:apply_parameters(atModules, tTestDescription, ulSerial)
                   -- Get the target module.
                   local tTargetModule = atModules[uiConnectionTargetTestCase]
                   if tTargetModule==nil then
-                    tLogSystem.info('Ignoring the connection "%s" to an inactive target: "%s".', strParameterConnection, strClass)
+                    tLogSystem.info(
+                      'Ignoring the connection "%s" to an inactive target: "%s".',
+                      strParameterConnection,
+                      strClass
+                    )
                   else
                     -- Get the parameter list of the target module.
                     local atTargetParameters = tTargetModule.atParameter or {}
                     -- Does the target module have a matching parameter?
                     local tTargetParameter = atTargetParameters[strName]
                     if tTargetParameter==nil then
-                      tLogSystem.fatal('The connection "%s" uses a non-existing parameter at the target: "%s".', strParameterConnection, strName)
+                      tLogSystem.fatal(
+                        'The connection "%s" uses a non-existing parameter at the target: "%s".',
+                        strParameterConnection,
+                        strName
+                      )
                       tResult = nil
                       break
                     else
-                      self.tLogSystem.info('Connecting %02d:%s to %02d:%s .', uiTestIndex, strParameterName, uiConnectionTargetTestCase, tTargetParameter.strName)
+                      self.tLogSystem.info(
+                        'Connecting %02d:%s to %02d:%s .',
+                        uiTestIndex,
+                        strParameterName,
+                        uiConnectionTargetTestCase,
+                        tTargetParameter.strName
+                      )
                       tParameter:connect(tTargetParameter)
                     end
                   end
@@ -442,21 +482,37 @@ function TestSystem:run_action(strAction)
       elseif pl.path.isfile(strAction)~=true then
         strMessage = string.format('The action "%s" is not a file.', strAction)
       else
-        local strLuaSrc, strMsg = pl.utils.readfile(strAction, false)
+        local strLuaSrc, strErrorRead = pl.utils.readfile(strAction, false)
         if strLuaSrc==nil then
-          strMessage = string.format('Failed to read the action file "%s": %s', strAction, strMsg)
+          strMessage = string.format('Failed to read the action file "%s": %s', strAction, strErrorRead)
         else
           -- Parse the LUA source.
           local _loadstring = loadstring or load
-          local tChunk, strMsg = _loadstring(strLuaSrc, strAction)
+          local tChunk, strErrorLoad = _loadstring(strLuaSrc, strAction)
           if tChunk==nil then
-            strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strMsg)
+            strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strErrorLoad)
           else
             -- Run the LUA chunk.
+            local fStatus, tResult
             if self.LUA_VER_NUM==501 then
-              fStatus, tResult = xpcall(function() tChunk(tLogSystem) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+              fStatus, tResult = xpcall(
+                function()
+                  tChunk(tLogSystem)
+                end,
+                function(tErr)
+                  tLogSystem.debug(debug.traceback())
+                  return tErr
+                end
+              )
             else
-              fStatus, tResult = xpcall(tChunk, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tLogSystem)
+              fStatus, tResult = xpcall(
+                tChunk,
+                function(tErr)
+                  tLogSystem.debug(debug.traceback())
+                  return tErr
+                end,
+                tLogSystem
+              )
             end
 
             if fStatus==true then
@@ -511,7 +567,7 @@ function TestSystem:__runInSandbox(atValues, strExpression)
   else
     local fRun, tFnResult = pcall(tFn)
     if fRun==false then
-      strMessage = string.format('Failed to run the expression "%s": %s', strExpression, tostring(tResult))
+      strMessage = string.format('Failed to run the expression "%s": %s', strExpression, tostring(tFnResult))
     else
       local strType = type(tFnResult)
       if strType=='boolean' then
@@ -640,19 +696,32 @@ function TestSystem:run_tests(atModules, tTestDescription)
           local atConditions = tTestDescription:getTestCaseExcludeIf(uiTestIndex)
           if atConditions==nil then
             -- Failed to get the conditions. Complain but run the test case.
-            tLogSystem.warning('Failed to get the exclude conditions for test case %d (%s). Assuming it is not excluded.', uiTestIndex, strTestCaseName)
+            tLogSystem.warning(
+              'Failed to get the exclude conditions for test case %d (%s). Assuming it is not excluded.',
+              uiTestIndex,
+              strTestCaseName
+            )
             fCondition = false
           else
             -- Check if at least one condition is true.
             fCondition, astrMessages = self:__checkConditions(atConditions, atConditionAttributes)
           end
           if fCondition==nil then
-            tLogSystem.error('Failed to evaluate the ExcludeIf conditions for test case %d (%s): %s', uiTestIndex, strTestCaseName, table.concat(astrMessages, ', '))
+            tLogSystem.error(
+              'Failed to evaluate the ExcludeIf conditions for test case %d (%s): %s',
+              uiTestIndex,
+              strTestCaseName,
+              table.concat(astrMessages, ', ')
+            )
             fContinueWithNextTestCase = false
             break
 
           elseif fCondition==true then
-            tLogSystem.info('Execution of the test case %d (%s) was prevented by the following ExcludeIf conditions:', uiTestIndex, strTestCaseName)
+            tLogSystem.info(
+              'Execution of the test case %d (%s) was prevented by the following ExcludeIf conditions:',
+              uiTestIndex,
+              strTestCaseName
+            )
             for _, strMessage in ipairs(astrMessages) do
               tLogSystem.info('  * %s', strMessage)
             end
@@ -664,19 +733,32 @@ function TestSystem:run_tests(atModules, tTestDescription)
             atConditions = tTestDescription:getTestCaseErrorIf(uiTestIndex)
             if atConditions==nil then
               -- Failed to get the conditions. Complain but run the test case.
-              tLogSystem.warning('Failed to get the error conditions for test case %d (%s). Assuming it is not in error state.', uiTestIndex, strTestCaseName)
+              tLogSystem.warning(
+                'Failed to get the error conditions for test case %d (%s). Assuming it is not in error state.',
+                uiTestIndex,
+                strTestCaseName
+              )
               fCondition = false
             else
               -- Check if at least one condition is true.
               fCondition, astrMessages = self:__checkConditions(atConditions, atConditionAttributes)
             end
             if fCondition==nil then
-              tLogSystem.error('Failed to evaluate the ErrorIf conditions for test case %d (%s): %s', uiTestIndex, strTestCaseName, table.concat(astrMessages, ', '))
+              tLogSystem.error(
+                'Failed to evaluate the ErrorIf conditions for test case %d (%s): %s',
+                uiTestIndex,
+                strTestCaseName,
+                table.concat(astrMessages, ', ')
+              )
               fContinueWithNextTestCase = false
               break
 
             elseif fCondition==true then
-              tLogSystem.error('Execution of the test case %d (%s) was prevented by the following ErrorIf conditions:', uiTestIndex, strTestCaseName)
+              tLogSystem.error(
+                'Execution of the test case %d (%s) was prevented by the following ErrorIf conditions:',
+                uiTestIndex,
+                strTestCaseName
+              )
               for _, strMessage in ipairs(astrMessages) do
                 tLogSystem.error('  * %s', strMessage)
               end
@@ -701,7 +783,12 @@ function TestSystem:run_tests(atModules, tTestDescription)
                 if tParameter.fIsOutput~=true then
                   local fValid, strError = tParameter:validate()
                   if fValid==false then
-                    tLogSystem.fatal('Failed to validate the parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+                    tLogSystem.fatal(
+                      'Failed to validate the parameter %02d:%s : %s',
+                      uiTestIndex,
+                      strParameterName,
+                      strError
+                    )
                     fStatus = false
                     fTestResult = false
                     atConditionAttributes.status_total = false
@@ -735,20 +822,36 @@ function TestSystem:run_tests(atModules, tTestDescription)
               tLogSystem.info("______________________________________________________________________________")
 
               -- Run a pre action if present.
-              local strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
+              strAction = tTestDescription:getTestCaseActionPre(uiTestIndex)
               fStatus, tResult = self:run_action(strAction)
               atTestStep.pre_result = fStatus
               if fStatus==true then
                 -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
                 if self.LUA_VER_NUM==501 then
-                  fStatus, tResult = xpcall(function() self.debug_hooks.run_teststep(tModule, uiTestIndex) end, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end)
+                  fStatus, tResult = xpcall(
+                    function()
+                      self.debug_hooks.run_teststep(tModule, uiTestIndex)
+                    end,
+                    function(tErr)
+                      tLogSystem.debug(debug.traceback())
+                      return tErr
+                    end
+                  )
                 else
-                  fStatus, tResult = xpcall(self.debug_hooks.run_teststep, function(tErr) tLogSystem.debug(debug.traceback()) return tErr end, tModule, uiTestIndex)
+                  fStatus, tResult = xpcall(
+                    self.debug_hooks.run_teststep,
+                    function(tErr)
+                      tLogSystem.debug(debug.traceback())
+                      return tErr
+                    end,
+                    tModule,
+                    uiTestIndex
+                  )
                 end
                 tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
                 if fStatus==true then
                   -- Run a post action if present.
-                  local strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
+                  strAction = tTestDescription:getTestCaseActionPost(uiTestIndex)
                   fStatus, tResult = self:run_action(strAction)
                   atTestStep.post_result = fStatus
                   if fStatus~=true then
@@ -778,7 +881,12 @@ function TestSystem:run_tests(atModules, tTestDescription)
                 if tParameter.fIsOutput==true then
                   local fValid, strError = tParameter:validate()
                   if fValid==false then
-                    tLogSystem.warning('Failed to validate the output parameter %02d:%s : %s', uiTestIndex, strParameterName, strError)
+                    tLogSystem.warning(
+                      'Failed to validate the output parameter %02d:%s : %s',
+                      uiTestIndex,
+                      strParameterName,
+                      strError
+                    )
                   end
                 end
               end
@@ -824,10 +932,10 @@ function TestSystem:run_tests(atModules, tTestDescription)
           self:sendTestStepFinished(strTestState)
 
           if fStatus==false then
-            local tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {
+            tResult = _G.tester:setInteractionGetJson('jsx/test_failed.jsx', {
               ['FAILED_TEST_IDX']=uiTestIndex,
-              ['FAILED_TEST_NAME']=self:__quote_with_ticks(strTestCaseName),
-              ['FAILED_TEST_MESSAGE']=self:__quote_with_ticks(atTestStep.message)
+              ['FAILED_TEST_NAME']=self.__quote_with_ticks(strTestCaseName),
+              ['FAILED_TEST_MESSAGE']=self.__quote_with_ticks(atTestStep.message)
             })
             if tResult==nil then
               tLogSystem.fatal('Failed to read interaction.')
@@ -887,7 +995,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
     _G.__MUHKUH_WEBUI_TESTRESULT = fTestResult
 
     -- Run a post action if present.
-    local strAction = tTestDescription:getPost()
+    strAction = tTestDescription:getPost()
     local fStatus
     fStatus, tResult = self:run_action(strAction)
     atConditionAttributes.post_result = fStatus
@@ -954,7 +1062,7 @@ end
 
 
 
-function TestSystem:__updateTestStati(abActiveTests)
+function TestSystem.__updateTestStati(abActiveTests)
   local astrStati = {}
   local astrStatiQuoted = {}
 
@@ -1007,7 +1115,7 @@ function TestSystem:run()
     local strTestNames = table.concat(astrQuotedTests, ', ')
 
     self:sendTestNames(astrTestNames)
-    local astrStati = self:__updateTestStati(abInitialStates)
+    local astrStati = self.__updateTestStati(abInitialStates)
     self:sendTestStati(astrStati)
 
     -- Get the configuration as a lookup table.
@@ -1020,7 +1128,12 @@ function TestSystem:run()
       if strOldValue==nil then
         tLogSystem.info('Setting configuration parameter "%s" to "%s".', strName, strValue)
       else
-        tLogSystem.warning('Replacing configuration parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+        tLogSystem.warning(
+          'Replacing configuration parameter "%s". Old value was "%s", now it is "%s".',
+          strName,
+          strOldValue,
+          strValue
+        )
       end
       atConfigurationLookup[strName] = strValue
     end
@@ -1062,7 +1175,12 @@ function TestSystem:run()
             if strOldValue==nil then
               tLogSystem.info('Setting system parameter "%s" to "%s".', strName, strValue)
             else
-              tLogSystem.warning('Replacing system parameter "%s". Old value was "%s", now it is "%s".', strName, strOldValue, strValue)
+              tLogSystem.warning(
+                'Replacing system parameter "%s". Old value was "%s", now it is "%s".',
+                strName,
+                strOldValue,
+                strValue
+              )
             end
             atSystemParameter[strName] = strValue
           end
@@ -1074,10 +1192,10 @@ function TestSystem:run()
         tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', {
           ['TEST_NAMES'] = strTestNames,
           ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
-          ['LABEL_VALIDATION_FUNCTION'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
-          ['LABEL_VALIDATION_DATA_TYP'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
-          ['LABEL_VALIDATION_DATA'] = self:__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
-          ['ADDITIONAL_INPUTS'] = self:__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
+          ['LABEL_VALIDATION_FUNCTION'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
+          ['LABEL_VALIDATION_DATA_TYP'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
+          ['LABEL_VALIDATION_DATA'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
+          ['ADDITIONAL_INPUTS'] = self.__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
         })
         if tResult==nil then
           strSystemErrorMessage = 'Failed to set the interaction to select the serial range and tests.'
@@ -1115,9 +1233,15 @@ function TestSystem:run()
               tLogSystem.debug('The current peer name is "%s".', strTargetIp)
 
               local fAgain = false
-              local fOk = false
+              local fOk
               repeat
-                local tDebugResult = _G.tester:setInteractionGetJson('jsx/connect_debugger.jsx', { ['IP']=strTargetIp, ['AGAIN']=tostring(fAgain) })
+                local tDebugResult = _G.tester:setInteractionGetJson(
+                  'jsx/connect_debugger.jsx',
+                  {
+                    ['IP']=strTargetIp,
+                    ['AGAIN']=tostring(fAgain)
+                  }
+                )
                 if tDebugResult==nil then
                   tLogSystem.fatal('Failed to read interaction.')
                   break
@@ -1146,7 +1270,7 @@ function TestSystem:run()
           end
 
           -- Update the test stati.
-          local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+          astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
           self:sendTestStati(astrStati)
 
           -- Get the current serial number.
@@ -1183,7 +1307,7 @@ function TestSystem:run()
           self:sendTestRunFinished()
 
           -- Reset all test stati to idle or disabled.
-          local astrStati, astrStatiQuoted = self:__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+          astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
           self:sendTestStati(astrStati)
         end
       until fTestSystemOk~=true

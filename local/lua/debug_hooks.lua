@@ -1,24 +1,21 @@
 local DebugHooks = {}
 
-function DebugHooks.init(strTargetIp,uiPortNumb)
+function DebugHooks.init(strTargetIp, uiPortNumb)
   -- Try to load the remote debugger.
   local tResult, tLuaPanda = pcall(require, 'LuaPanda')
 
   if tResult==true then
+    -- start the client with the given IP and port number
+    tLuaPanda.start(strTargetIp,uiPortNumb)
 
-	-- start the client with the given IP and port number
-	tLuaPanda.start(strTargetIp,uiPortNumb)
+    -- check the connection
+    tResult = tLuaPanda.isConnected()
 
-	-- check the connection
-	tResult = tLuaPanda.isConnected()
-
-	DebugHooks.tLuaPanda = tLuaPanda
-
+    DebugHooks.tLuaPanda = tLuaPanda
   end
 
   return tResult
 end
-
 
 
 function DebugHooks.run_teststep(tTestInstance, uiTestStep)
