@@ -271,7 +271,7 @@ end
 
 
 
-function TestSystem:apply_parameters(atModules, tTestDescription, _)
+function TestSystem:__apply_parameters(atModules, tTestDescription, _)
   local tLogSystem = self.tLogSystem
   local tResult = true
 
@@ -305,7 +305,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
             uiTestIndex,
             strTestCaseName
           )
-          tResult = nil
+          tResult = false
           break
         -- Is the parameter an "output"?
         elseif tParameter.fIsOutput==true then
@@ -315,7 +315,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
             uiTestIndex,
             strTestCaseName
           )
-          tResult = nil
+          tResult = false
           break
         else
           if strParameterValue~=nil then
@@ -331,7 +331,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
                 uiTestIndex,
                 strParameterConnection
               )
-              tResult = nil
+              tResult = false
               break
             else
               -- Is this a connection to a system parameter?
@@ -342,7 +342,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
                     'The connection target "%s" has an unknown name.',
                     strParameterConnection
                   )
-                  tResult = nil
+                  tResult = false
                   break
                 else
                   tParameter:set(tostring(tValue))
@@ -360,7 +360,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
                       strParameterConnection,
                       strClass
                     )
-                    tResult = nil
+                    tResult = false
                     break
                   end
                 end
@@ -384,7 +384,7 @@ function TestSystem:apply_parameters(atModules, tTestDescription, _)
                         strParameterConnection,
                         strName
                       )
-                      tResult = nil
+                      tResult = false
                       break
                     else
                       self.tLogSystem.info(
@@ -1286,8 +1286,8 @@ function TestSystem:run()
           else
             local atModules = tResult
 
-            tResult = self:apply_parameters(atModules, tTestDescription, ulSerialCurrent)
-            if tResult==nil then
+            tResult = self:__apply_parameters(atModules, tTestDescription, ulSerialCurrent)
+            if tResult~=true then
               strSystemErrorMessage = 'Failed to apply the parameters.'
               fTestSystemOk = false
             else
