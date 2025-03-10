@@ -411,7 +411,7 @@ end
 
 
 
-function TestSystem:check_parameters(atModules, tTestDescription)
+function TestSystem:__check_parameters(atModules, tTestDescription)
   local tLogSystem = self.tLogSystem
   -- Check all parameters.
   local fParametersOk = true
@@ -438,7 +438,7 @@ function TestSystem:check_parameters(atModules, tTestDescription)
           local fValid, strError = tParameter:validate()
           if fValid==false then
             tLogSystem.fatal('The parameter %02d:%s is invalid: %s', uiTestIndex, tParameter.strName, strError)
-            fParametersOk = nil
+            fParametersOk = false
           end
         end
       end
@@ -1291,8 +1291,8 @@ function TestSystem:run()
               strSystemErrorMessage = 'Failed to apply the parameters.'
               fTestSystemOk = false
             else
-              tResult = self:check_parameters(atModules, tTestDescription)
-              if tResult==nil then
+              tResult = self:__check_parameters(atModules, tTestDescription)
+              if tResult~=true then
                 strSystemErrorMessage = 'Failed to check the parameters.'
                 fTestSystemOk = false
               else
