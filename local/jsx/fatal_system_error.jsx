@@ -4,7 +4,7 @@ class Interaction extends React.Component {
 
     this.initialFocus = null;
 
-    this.strErrorMessage = "@ERROR_MESSAGE@";
+    this.strErrorMessage = '@ERROR_MESSAGE@';
   }
 
   componentDidMount() {
