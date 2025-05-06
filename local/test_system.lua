@@ -674,6 +674,7 @@ function TestSystem:run_tests(atModules, tTestDescription)
           local strTestCaseId = tTestDescription:getTestCaseId(uiTestIndex)
           self:sendTestStepStart(uiTestIndex, strTestCaseId, strTestCaseName)
 
+          ---@type nil | boolean
           local fStatus = true
           local strTestState
           local strTestMessage = ''
