@@ -487,33 +487,19 @@ function TestSystem:run_action(strAction)
           strMessage = string.format('Failed to read the action file "%s": %s', strAction, strErrorRead)
         else
           -- Parse the LUA source.
-          local _loadstring = loadstring or load
-          local tChunk, strErrorLoad = _loadstring(strLuaSrc, strAction)
+          local tChunk, strErrorLoad = load(strLuaSrc, strAction)
           if tChunk==nil then
             strMessage = string.format('Failed to parse the LUA action from "%s": %s', strAction, strErrorLoad)
           else
             -- Run the LUA chunk.
-            local fStatus, tResult
-            if self.LUA_VER_NUM==501 then
-              fStatus, tResult = xpcall(
-                function()
-                  tChunk(tLogSystem)
-                end,
-                function(tErr)
-                  tLogSystem.debug(debug.traceback())
-                  return tErr
-                end
-              )
-            else
-              fStatus, tResult = xpcall(
-                tChunk,
-                function(tErr)
-                  tLogSystem.debug(debug.traceback())
-                  return tErr
-                end,
-                tLogSystem
-              )
-            end
+            local fStatus, tResult = xpcall(
+              tChunk,
+              function(tErr)
+                tLogSystem.debug(debug.traceback())
+                return tErr
+              end,
+              tLogSystem
+            )
 
             if fStatus==true then
               tActionResult = tResult
@@ -827,27 +813,15 @@ function TestSystem:run_tests(atModules, tTestDescription)
               atTestStep.pre_result = fStatus
               if fStatus==true then
                 -- Execute the test code. Write a stack trace to the debug logger if the test case crashes.
-                if self.LUA_VER_NUM==501 then
-                  fStatus, tResult = xpcall(
-                    function()
-                      self.debug_hooks.run_teststep(tModule, uiTestIndex)
-                    end,
-                    function(tErr)
-                      tLogSystem.debug(debug.traceback())
-                      return tErr
-                    end
-                  )
-                else
-                  fStatus, tResult = xpcall(
-                    self.debug_hooks.run_teststep,
-                    function(tErr)
-                      tLogSystem.debug(debug.traceback())
-                      return tErr
-                    end,
-                    tModule,
-                    uiTestIndex
-                  )
-                end
+                fStatus, tResult = xpcall(
+                  self.debug_hooks.run_teststep,
+                  function(tErr)
+                    tLogSystem.debug(debug.traceback())
+                    return tErr
+                  end,
+                  tModule,
+                  uiTestIndex
+                )
                 tLogSystem.info('Testcase %d (%s) finished.', uiTestIndex, strTestCaseName)
                 if fStatus==true then
                   -- Run a post action if present.
