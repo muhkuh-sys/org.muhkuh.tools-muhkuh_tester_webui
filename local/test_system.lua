@@ -1501,7 +1501,7 @@ function TestSystem:run()
       end
       tLogSystem.fatal(strSystemErrorMessage)
       _G.tester:setInteractionGetJson('jsx/fatal_system_error.jsx', {
-        ['ERROR_MESSAGE'] = strSystemErrorMessage
+        ['ERROR_MESSAGE'] = self.__quote_with_ticks(strSystemErrorMessage)
       })
     end
   end
