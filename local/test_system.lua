@@ -570,6 +570,7 @@ end
 
 
 function TestSystem:__checkConditions(atConditions, atConditionAttributes)
+  ---@type nil | boolean
   local fCondition = false
   local astrMessages = {}
   local tLogSystem = self.tLogSystem
