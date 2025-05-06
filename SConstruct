@@ -98,6 +98,10 @@ tArcList0.AddFiles('',
 tArcList0.AddFiles('lua/',
     'local/lua/debug_hooks.lua')
 
+tArcList0.AddFiles('lua/webui/input/',
+    'local/lua/webui/input/fertigungsauftrag_input.lua',
+    'local/lua/webui/input/matrixlabel_input.lua')
+
 tArcList0.AddFiles('jsx/',
     'local/jsx/connect_debugger.jsx',
     'local/jsx/fatal_system_error.jsx',

@@ -1080,6 +1080,161 @@ end
 
 
 
+function TestSystem.__addLevel(atLevelLookup, uiLevel, tPluginInstance)
+  local atLevel = atLevelLookup[uiLevel]
+  if atLevel==nil then
+    atLevel = {}
+    atLevelLookup[uiLevel] = atLevel
+  end
+  table.insert(atLevel, tPluginInstance)
+end
+
+
+
+function TestSystem.__sortLevelTable(atLevelLookup)
+  -- Get a sorted list of all levels in the lookup table.
+  local atSortedLevels = {}
+  for uiLevel in pairs(atLevelLookup) do
+    table.insert(atSortedLevels, uiLevel)
+  end
+  table.sort(atSortedLevels)
+
+  -- Loop over the sorted levels.
+  local atSortedPluginInstances = {}
+  for _, uiLevel in ipairs(atSortedLevels) do
+    local atLevel = atLevelLookup[uiLevel]
+    for _, tPluginInstance in ipairs(atLevel) do
+      table.insert(atSortedPluginInstances, tPluginInstance)
+    end
+  end
+
+  return atSortedPluginInstances
+end
+
+
+
+function TestSystem:__setInputPluginsConfiguration(tInputPluginsConfiguration)
+  local tLogSystem = self.tLogSystem
+
+  -- Get all input plugins as a lookup table.
+  -- Create also lists for the functions "get_jsx" and "get_data" sorted by the levels.
+  local atInputPlugins = {}
+  local atGetJsxCfg = {}
+  local atGetDataCfg = {}
+  local fPluginsOk = true
+  for uiPluginIdx, tPluginCfg in ipairs(tInputPluginsConfiguration) do
+    local strPluginCfgId = tPluginCfg.id
+    local strPluginCfgPlugin = tPluginCfg.plugin
+    local tPluginParameter = tPluginCfg.parameter
+    if strPluginCfgId==nil then
+      tLogSystem.error('Error in definition of input plugin #%d: missing mandatory attribute "id".', uiPluginIdx)
+      fPluginsOk = false
+    elseif strPluginCfgPlugin==nil then
+      tLogSystem.error('Error in definition of input plugin #%d: missing mandatory attribute "plugin".', uiPluginIdx)
+      fPluginsOk = false
+    else
+      if atInputPlugins[strPluginCfgId]~=nil then
+        tLogSystem.error(
+          'Error in definition of input plugin #%d: the value "%s" of attribute "id" is not unique.',
+          uiPluginIdx,
+          strPluginCfgId
+        )
+        fPluginsOk = false
+      else
+        local strPluginLuaId = 'webui.input.' .. strPluginCfgPlugin
+        local fPcallReqRes, tInputPlugin = pcall(require, strPluginLuaId)
+        if fPcallReqRes~=true then
+          tLogSystem.error(
+            'Failed to load input plugin #%d ("%s"): %s',
+            uiPluginIdx,
+            strPluginLuaId,
+            tostring(tInputPlugin)
+          )
+          fPluginsOk = false
+        else
+          -- Try to create an instance of the plugin.
+          local tPluginInstance = tInputPlugin(tLogSystem, tPluginParameter)
+          if tPluginInstance==nil then
+            tLogSystem.error(
+              'Failed to instanciate input plugin #%d ("%s").',
+              uiPluginIdx,
+              strPluginLuaId
+            )
+            fPluginsOk = false
+
+          elseif type(tPluginInstance.get_jsx)~='function' then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): missing "get_jsx" method.',
+              uiPluginIdx,
+              strPluginLuaId
+            )
+            fPluginsOk = false
+
+          elseif type(tPluginInstance.get_data)~='function' then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): missing "get_data" method.',
+              uiPluginIdx,
+              strPluginLuaId
+            )
+            fPluginsOk = false
+
+          elseif type(tPluginInstance.get_jsx_level)~='number' then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): missing "get_jsx_level" attribute.',
+              uiPluginIdx,
+              strPluginLuaId
+            )
+            fPluginsOk = false
+
+          elseif type(tPluginInstance.get_data_level)~='number' then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): missing "get_data_level" attribute.',
+              uiPluginIdx,
+              strPluginLuaId
+            )
+            fPluginsOk = false
+
+          elseif tPluginInstance.get_jsx_level<0 or tPluginInstance.get_jsx_level>99 then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): attribute "get_jsx_level" exceeds the valid range of [0;99]: %d',
+              uiPluginIdx,
+              strPluginLuaId,
+              tPluginInstance.get_jsx_level
+            )
+            fPluginsOk = false
+
+          elseif tPluginInstance.get_data_level<0 or tPluginInstance.get_data_level>99 then
+            tLogSystem.error(
+              'Invalid input plugin #%d ("%s"): attribute "get_data_level" exceeds the valid range of [0;99]: %d',
+              uiPluginIdx,
+              strPluginLuaId,
+              tPluginInstance.get_data_level
+            )
+            fPluginsOk = false
+
+          else
+            tPluginInstance.m_strPluginCfgId = strPluginCfgId
+            self.__addLevel(atGetJsxCfg, tPluginInstance.get_jsx_level, tPluginInstance)
+            self.__addLevel(atGetDataCfg, tPluginInstance.get_data_level, tPluginInstance)
+
+            atInputPlugins[strPluginCfgId] = tPluginInstance
+          end
+        end
+      end
+    end
+  end
+
+  if fPluginsOk then
+    self.m_atInputPlugins = atInputPlugins
+    self.m_atInputPluginsGetJsx = self.__sortLevelTable(atGetJsxCfg)
+    self.m_atInputPluginsGetData = self.__sortLevelTable(atGetDataCfg)
+  end
+
+  return fPluginsOk
+end
+
+
+
 function TestSystem:run()
   local pl = self.pl
   local tLogSystem = self.tLogSystem
@@ -1139,10 +1294,10 @@ function TestSystem:run()
     end
     -- Apply some defaults.
     local atConfigurationDefaults = {
-      ['LabelValidationFunction'] = 'NONE',
-      ['LabelValidationDataTyp'] = 'STRING',
-      ['LabelValidationData'] = '',
-      ['AdditionalInputs'] = '{}',
+      ['Inputs'] = '[' ..
+                     '{"id": "fertigungsauftrag", "plugin": "fertigungsauftrag_input"},' ..
+                     '{"id": "matrixlabel", "plugin": "matrixlabel_input"}' ..
+                   ']',
       ['DataProvider'] = '[]'
     }
     for strName, strValue in pairs(atConfigurationDefaults) do
@@ -1154,8 +1309,13 @@ function TestSystem:run()
 
     -- Parse the configuration and assign it to the tester.
     local tDataProviderConfiguration, strDataProviderError = self.json.decode(atConfigurationLookup.DataProvider)
+    local tInputPluginsConfiguration, strInputPluginsError = self.json.decode(atConfigurationLookup.Inputs)
     if tDataProviderConfiguration==nil then
       tLogSystem.fatal('Failed to parse the data provider configuration: ' .. tostring(strDataProviderError))
+    elseif tInputPluginsConfiguration==nil then
+      tLogSystem.fatal('Failed to parse the input plugins configuration: ' .. tostring(strInputPluginsError))
+    elseif self:__setInputPluginsConfiguration(tInputPluginsConfiguration)~=true then
+      tLogSystem.fatal('Failed to set the input plugins configuration.')
     else
       _G.tester:setDataProviderConfiguration(tDataProviderConfiguration, self.tLogWriterFn, self.strLogLevel)
 
@@ -1188,14 +1348,21 @@ function TestSystem:run()
         self.m_atSystemParameter = atSystemParameter
         _G.tester:setSystemParameter(atSystemParameter)
 
+        -- Collect the JSX code for all input elements.
+        local astrInputObjects = {}
+        for _, tPluginInstance in ipairs(self.m_atInputPluginsGetJsx) do
+          local strJsx = tPluginInstance:get_jsx()
+          if type(strJsx)=='string' then
+            table.insert(astrInputObjects, strJsx)
+          end
+        end
+        local strInputObjects = table.concat(astrInputObjects, ',\n')
+
         -- Read the first interaction code.
         tResult = _G.tester:setInteractionGetJson('jsx/select_serial_range_and_tests.jsx', {
           ['TEST_NAMES'] = strTestNames,
           ['LAST_PRODUCTION_NUMBER'] = strCurrentProductionNumber,
-          ['LABEL_VALIDATION_FUNCTION'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationFunction']),
-          ['LABEL_VALIDATION_DATA_TYP'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationDataTyp']),
-          ['LABEL_VALIDATION_DATA'] = self.__quote_with_ticks(atConfigurationLookup['LabelValidationData']),
-          ['ADDITIONAL_INPUTS'] = self.__quote_with_ticks(atConfigurationLookup['AdditionalInputs'])
+          ['INPUT_ELEMENTS'] = strInputObjects
         })
         if tResult==nil then
           strSystemErrorMessage = 'Failed to set the interaction to select the serial range and tests.'
@@ -1203,112 +1370,153 @@ function TestSystem:run()
         else
           local tJson = tResult
 
-          -- Add the system parameter from the dialog.
-          local tAdditionalSystemParameter = tJson.systemParameter
-          if tAdditionalSystemParameter~=nil then
-            pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
-          end
-
-          self:sendTestRunStart()
-
-          pl.pretty.dump(tJson)
-          _G.tester:sendLogEvent('muhkuh.test.start', {
-            package = tPackageInfo,
-            selection = tJson.activeTests
-          })
-
-          self.m_atTestExecutionParameter = tJson
           _G.tester:clearInteraction()
 
-          -- Remember the production number for the next run.
-          strCurrentProductionNumber = self.m_atSystemParameter.production_number
-
-          self:sendDisableLogging(tJson.fDisableLogging)
-
-          if tJson.fActivateDebugging==true then
-            local strTargetIp = _G.tester:getCurrentPeerName()
-            if strTargetIp=='' then
-              tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
-            else
-              tLogSystem.debug('The current peer name is "%s".', strTargetIp)
-
-              local fAgain = false
-              local fOk
-              repeat
-                local tDebugResult = _G.tester:setInteractionGetJson(
-                  'jsx/connect_debugger.jsx',
-                  {
-                    ['IP']=strTargetIp,
-                    ['AGAIN']=tostring(fAgain)
-                  }
+          -- Add all system parameters from the LUA side.
+          local tAdditionalSystemParameter = tJson.systemParameter or {}
+          local astrPluginErrors = {}
+          for _, tInputPluginInstance in ipairs(self.m_atInputPluginsGetData) do
+            local fPcallRes, fPluginRes, strPluginError = pcall(
+              tInputPluginInstance.get_data,
+              tInputPluginInstance,
+              tAdditionalSystemParameter
+            )
+            if fPcallRes~=true then
+              if strPluginError==nil then
+                strPluginError = 'No error message'
+              end
+              table.insert(
+                astrPluginErrors,
+                string.format(
+                  'The "get_data" method of plugin "%s" crashed: %s',
+                  tInputPluginInstance.m_strPluginCfgId,
+                  tostring(fPluginRes)
                 )
-                if tDebugResult==nil then
-                  tLogSystem.fatal('Failed to read interaction.')
-                  break
-                else
-                  pl.pretty.dump(tDebugResult)
-                  if tDebugResult.button=='connect' then
-                    tLogSystem.info('Connecting to debug server.')
-                    local tInitResult = self.debug_hooks.init(tDebugResult.IP,tDebugResult.Port)
-                    tLogSystem.info('Debug init: %s', tostring(tInitResult))
-                    if tInitResult==true then
+              )
+
+            elseif fPluginRes~=true then
+              if strPluginError==nil then
+                strPluginError = 'No error message'
+              end
+              table.insert(
+                astrPluginErrors,
+                string.format(
+                  'Failed to get input values from plugin "%s": %s',
+                  tInputPluginInstance.m_strPluginCfgId,
+                  tostring(strPluginError)
+                )
+              )
+
+            end
+          end
+          if #astrPluginErrors>0 then
+            strSystemErrorMessage = table.concat(astrPluginErrors, '\n');
+            fTestSystemOk = false
+          else
+            -- Add the system parameter from the dialog.
+            pl.tablex.update(self.m_atSystemParameter, tAdditionalSystemParameter)
+
+            self:sendTestRunStart()
+
+            pl.pretty.dump(tJson)
+            _G.tester:sendLogEvent('muhkuh.test.start', {
+              package = tPackageInfo,
+              selection = tJson.activeTests
+            })
+
+            self.m_atTestExecutionParameter = tJson
+            _G.tester:clearInteraction()
+
+            -- Remember the production number for the next run.
+            strCurrentProductionNumber = self.m_atSystemParameter.production_number
+
+            self:sendDisableLogging(tJson.fDisableLogging)
+
+            if tJson.fActivateDebugging==true then
+              local strTargetIp = _G.tester:getCurrentPeerName()
+              if strTargetIp=='' then
+                tLogSystem.alert('Failed to get the current peer name -> unable to setup debugging.')
+              else
+                tLogSystem.debug('The current peer name is "%s".', strTargetIp)
+
+                local fAgain = false
+                local fOk
+                repeat
+                  local tDebugResult = _G.tester:setInteractionGetJson(
+                    'jsx/connect_debugger.jsx',
+                    {
+                      ['IP']=strTargetIp,
+                      ['AGAIN']=tostring(fAgain)
+                    }
+                  )
+                  if tDebugResult==nil then
+                    tLogSystem.fatal('Failed to read interaction.')
+                    break
+                  else
+                    pl.pretty.dump(tDebugResult)
+                    if tDebugResult.button=='connect' then
+                      tLogSystem.info('Connecting to debug server.')
+                      local tInitResult = self.debug_hooks.init(tDebugResult.IP,tDebugResult.Port)
+                      tLogSystem.info('Debug init: %s', tostring(tInitResult))
+                      if tInitResult==true then
+                        fOk = true
+                      else
+                        fOk = false
+                        fAgain = true
+                      end
+                    elseif tDebugResult.button=='cancel' then
                       fOk = true
                     else
                       fOk = false
-                      fAgain = true
                     end
-                  elseif tDebugResult.button=='cancel' then
-                    fOk = true
-                  else
-                    fOk = false
                   end
-                end
-              until fOk==true
+                until fOk==true
 
-              _G.tester:clearInteraction()
+                _G.tester:clearInteraction()
+              end
             end
-          end
 
-          -- Update the test stati.
-          astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-          self:sendTestStati(astrStati)
+            -- Update the test stati.
+            astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+            self:sendTestStati(astrStati)
 
-          -- Get the current serial number.
-          local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
-          self:sendCurrentSerial(ulSerialCurrent)
+            -- Get the current serial number.
+            local ulSerialCurrent = tonumber(self.m_atSystemParameter.serial)
+            self:sendCurrentSerial(ulSerialCurrent)
 
-          tLogSystem.info('Testing serial %d .', ulSerialCurrent)
+            tLogSystem.info('Testing serial %d .', ulSerialCurrent)
 
-          tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
-          if tResult==nil then
-            strSystemErrorMessage = 'Failed to collect all test cases.'
-            fTestSystemOk = false
-          else
-            local atModules = tResult
-
-            tResult = self:__apply_parameters(atModules, tTestDescription, ulSerialCurrent)
-            if tResult~=true then
-              strSystemErrorMessage = 'Failed to apply the parameters.'
+            tResult = self:collect_testcases(tTestDescription, tJson.activeTests)
+            if tResult==nil then
+              strSystemErrorMessage = 'Failed to collect all test cases.'
               fTestSystemOk = false
             else
-              tResult = self:__check_parameters(atModules, tTestDescription)
+              local atModules = tResult
+
+              tResult = self:__apply_parameters(atModules, tTestDescription, ulSerialCurrent)
               if tResult~=true then
-                strSystemErrorMessage = 'Failed to check the parameters.'
+                strSystemErrorMessage = 'Failed to apply the parameters.'
                 fTestSystemOk = false
               else
-                tResult = self:run_tests(atModules, tTestDescription)
+                tResult = self:__check_parameters(atModules, tTestDescription)
                 if tResult~=true then
-                  break
+                  strSystemErrorMessage = 'Failed to check the parameters.'
+                  fTestSystemOk = false
+                else
+                  tResult = self:run_tests(atModules, tTestDescription)
+                  if tResult~=true then
+                    break
+                  end
                 end
               end
             end
+
+            self:sendTestRunFinished()
+
+            -- Reset all test stati to idle or disabled.
+            astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
+            self:sendTestStati(astrStati)
           end
-
-          self:sendTestRunFinished()
-
-          -- Reset all test stati to idle or disabled.
-          astrStati = self.__updateTestStati(self.m_atTestExecutionParameter.activeTests)
-          self:sendTestStati(astrStati)
         end
       until fTestSystemOk~=true
 
