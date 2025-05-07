@@ -1321,18 +1321,20 @@ function TestSystem:run()
       end
     end
 
-    -- Parse the configuration and assign it to the tester.
-    local tDataProviderConfiguration, strDataProviderError = self.json.decode(atConfigurationLookup.DataProvider)
+    -- Get the data provider from the order info.
+    local tDataProviderConfiguration = {}
+    if type(self.m_tOrderInfo.dataprovider)=='table' then
+      tDataProviderConfiguration = self.m_tOrderInfo.dataprovider
+    end
+    _G.tester:setDataProviderConfiguration(tDataProviderConfiguration, self.tLogWriterFn, self.strLogLevel)
+
+    -- Parse the input plugins.
     local tInputPluginsConfiguration, strInputPluginsError = self.json.decode(atConfigurationLookup.Inputs)
-    if tDataProviderConfiguration==nil then
-      tLogSystem.fatal('Failed to parse the data provider configuration: ' .. tostring(strDataProviderError))
-    elseif tInputPluginsConfiguration==nil then
+    if tInputPluginsConfiguration==nil then
       tLogSystem.fatal('Failed to parse the input plugins configuration: ' .. tostring(strInputPluginsError))
     elseif self:__setInputPluginsConfiguration(tInputPluginsConfiguration)~=true then
       tLogSystem.fatal('Failed to set the input plugins configuration.')
     else
-      _G.tester:setDataProviderConfiguration(tDataProviderConfiguration, self.tLogWriterFn, self.strLogLevel)
-
       -- Run the test until a fatal error occured.
       local fTestSystemOk = true
       local strCurrentProductionNumber = ''
