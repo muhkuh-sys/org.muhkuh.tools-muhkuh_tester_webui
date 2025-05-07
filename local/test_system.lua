@@ -31,6 +31,7 @@ function TestSystem:_init(usServerPort)
   self.m_zmqSocket = nil
   self.m_atTestExecutionParameter = nil
   self.m_atSystemParameter = nil
+  self.m_tOrderInfo = nil
 end
 
 
@@ -1211,6 +1212,40 @@ end
 
 
 
+function TestSystem:__readOrderInfo()
+  local tLogSystem = self.tLogSystem
+
+  local tOrderInfo = {}
+  local utils = require 'pl.utils'
+  local strOrderInfoPath = '/tmp/muhkuh/orderinfo.json'
+  local strOrderInfo, strReadError = utils.readfile(strOrderInfoPath, false)
+  if strOrderInfo==nil then
+    tLogSystem.error(
+      'Failed to read the order info from "%s": %s',
+      strOrderInfoPath,
+      strReadError
+    )
+
+  else
+    local json = require 'dkjson'
+    local tData, strJsonError = json.decode(strOrderInfo)
+    if tData==nil then
+      tLogSystem.error(
+        'Failed to parse the order info from "%s" as JSON: %s',
+        strOrderInfoPath,
+        strJsonError
+      )
+
+    else
+      tOrderInfo = tData
+    end
+  end
+
+  self.m_tOrderInfo = tOrderInfo
+end
+
+
+
 function TestSystem:run()
   local pl = self.pl
   local tLogSystem = self.tLogSystem
@@ -1228,6 +1263,9 @@ function TestSystem:run()
       tLogSystem.debug('Failed to read the package file "%s": %s', strPackageInfoFile, tostring(strError))
     end
   end
+
+  -- Read the order info.
+  self:__readOrderInfo()
 
   -- Read the test.xml file.
   local tTestDescription = self.TestDescription(tLogSystem)
