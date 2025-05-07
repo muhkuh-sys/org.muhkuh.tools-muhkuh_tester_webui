@@ -1,5 +1,20 @@
 --
--- Example:
+-- Example for a article, hardware revision and serial range from the order information:
+--    <Configuration>
+--      <Parameter name="Inputs">[
+--        ...
+--        {
+--          "id": "matrixlabel",
+--          "plugin": "matrixlabel_input",
+--          "parameter": {
+--            "validation": {
+--              "function": "ORDER-INFO"
+--            }
+--          }
+--        }
+--      ]</Parameter>
+--
+-- Example for a prefix list:
 --    <Configuration>
 --      <Parameter name="Inputs">[
 --        ...
@@ -22,7 +37,7 @@
 local class = require 'pl.class'
 local _M = class()
 
-function _M:_init(tLog, tParameter)
+function _M:_init(tLog, tOrderInfo, tPluginCfg)
   self.tLog = tLog
 
   -- Set the default label validator to "NONE".
@@ -30,9 +45,28 @@ function _M:_init(tLog, tParameter)
   local strLabelValidationDataTyp = 'STRING'
   local strLabelValidationData = ''
 
+  -- If the order information exists and it has an article number, hardware revision and serial range then set the
+  -- default to "ORDER-INFO".
+  if(
+    type(tOrderInfo)=='table' and
+    type(tOrderInfo.article)=='table' and
+    type(tOrderInfo.article.nr)=='number' and
+    type(tOrderInfo.article.hwrev)=='number' and
+    type(tOrderInfo.serials)=='table'
+  ) then
+    strLabelValidationFnId = 'ORDER-INFO'
+    strLabelValidationDataTyp = 'JSON'
+    local json = require 'dkjson'
+    strLabelValidationData = json.encode{
+      article = tOrderInfo.article.nr,
+      hwrev = tOrderInfo.article.hwrev,
+      serials = tOrderInfo.serials
+    }
+  end
+
   -- Overwrite the defaults with the parameters.
-  if type(tParameter)=='table' then
-    local tValidationCfg = tParameter['validation']
+  if type(tPluginCfg)=='table' and type(tPluginCfg.parameter)=='table' then
+    local tValidationCfg = tPluginCfg.parameter['validation']
     if type(tValidationCfg)=='table' then
       local strValidatorFnId = tValidationCfg['function']
       if type(strValidatorFnId)=='string' then
@@ -69,9 +103,7 @@ function _M:get_jsx()
 
         this.tRegExp_matrix_label = new RegExp('^([0-9]{7})([0-9a-z])([0-9]{5,6})$');
 
-        this.ulDeviceNr = null;
-        this.ucHwRev = null;
-        this.ulSerial = null;
+        this.tLabelComponents = null;
 
         let strProductionNumber = '@LAST_PRODUCTION_NUMBER@';
         this.fHaveLastProductionNumber = true;
@@ -83,10 +115,18 @@ function _M:get_jsx()
         atPredefinedValidators.set('NONE', '');
         atPredefinedValidators.set('PREFIX-LIST',
           'const strLabel = arguments[0];\n' +
-          'const tData = arguments[1];\n' +
+          'const tData = arguments[2];\n' +
           'const fnTest = (strPrefix) => strLabel.toLowerCase().startsWith(strPrefix.toLowerCase());\n' +
           'const iIdx = tData.findIndex(fnTest);\n' +
           'return iIdx!=-1;');
+        atPredefinedValidators.set('ORDER-INFO',
+          'const tLabelComponents = arguments[1];\n' +
+          'const tOrderInfoData = arguments[2];\n' +
+          'return (\n' +
+          '  tLabelComponents.article==tOrderInfoData.article &&\n' +
+          '  tLabelComponents.hwrev==tOrderInfoData.hwrev &&\n' +
+          '  tOrderInfoData.serials.includes(tLabelComponents.serial)\n' +
+          ');');
 
         let strFunctionLabelIsValid = '@LABEL_VALIDATION_FUNCTION@';
         if( atPredefinedValidators.has(strFunctionLabelIsValid)==true ) {
@@ -149,9 +189,12 @@ function _M:get_jsx()
             }
             tHwRev = parseInt(tHwRev);
 
-            this.ulDeviceNr = parseInt(astrMatchMatrixLabel[1]);
-            this.ucHwRev = parseInt(tHwRev);
-            this.ulSerial = parseInt(astrMatchMatrixLabel[3]);
+            const tLabelComponents = {
+              article: parseInt(astrMatchMatrixLabel[1]),
+              hwrev: parseInt(tHwRev),
+              serial: parseInt(astrMatchMatrixLabel[3])
+            };
+            this.tLabelComponents = tLabelComponents;
 
             // Does a validation function exist?
             const fnValidation = this.fnLabelIsValid;
@@ -168,11 +211,8 @@ function _M:get_jsx()
               err = true;
               msg = 'The label validation data is not correct. This is a configuration problem of the teststation.';
             } else {
-              /* Check if the matrix label starts with one of the elements of the
-                * valid boards array.
-                */
               try {
-                const fIsValid = fnValidation(strMatrixLabel, tLabelValidationData);
+                const fIsValid = fnValidation(strMatrixLabel, tLabelComponents, tLabelValidationData);
                 if( fIsValid==true ) {
                   err = false;
                   msg = '';
@@ -236,12 +276,12 @@ function _M:get_jsx()
       },
 
       store_result(_tSystemParameter) {
-          _tSystemParameter.devicenr = this.ulDeviceNr;
-          console.log('Added result "devicenr": ' + this.ulDeviceNr.toString());
-          _tSystemParameter.hwrev = this.ucHwRev;
-          console.log('Added result "hwrev": ' + this.ucHwRev.toString());
-          _tSystemParameter.serial = this.ulSerial;
-          console.log('Added result "serial": ' + this.ulSerial.toString());
+          _tSystemParameter.devicenr = this.tLabelComponents.article;
+          console.log('Added result "devicenr": ' + this.tLabelComponents.article.toString());
+          _tSystemParameter.hwrev = this.tLabelComponents.hwrev;
+          console.log('Added result "hwrev": ' + this.tLabelComponents.hwrev.toString());
+          _tSystemParameter.serial = this.tLabelComponents.serial;
+          console.log('Added result "serial": ' + this.tLabelComponents.serial.toString());
       }
     }
   ]]

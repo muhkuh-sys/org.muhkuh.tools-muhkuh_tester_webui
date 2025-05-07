@@ -1095,6 +1095,7 @@ function TestSystem:__setInputPluginsConfiguration(tInputPluginsConfiguration)
 
   -- Get all input plugins as a lookup table.
   -- Create also lists for the functions "get_jsx" and "get_data" sorted by the levels.
+  local tOrderInfo = self.m_tOrderInfo
   local atInputPlugins = {}
   local atGetJsxCfg = {}
   local atGetDataCfg = {}
@@ -1102,7 +1103,6 @@ function TestSystem:__setInputPluginsConfiguration(tInputPluginsConfiguration)
   for uiPluginIdx, tPluginCfg in ipairs(tInputPluginsConfiguration) do
     local strPluginCfgId = tPluginCfg.id
     local strPluginCfgPlugin = tPluginCfg.plugin
-    local tPluginParameter = tPluginCfg.parameter
     if strPluginCfgId==nil then
       tLogSystem.error('Error in definition of input plugin #%d: missing mandatory attribute "id".', uiPluginIdx)
       fPluginsOk = false
@@ -1130,7 +1130,7 @@ function TestSystem:__setInputPluginsConfiguration(tInputPluginsConfiguration)
           fPluginsOk = false
         else
           -- Try to create an instance of the plugin.
-          local tPluginInstance = tInputPlugin(tLogSystem, tPluginParameter)
+          local tPluginInstance = tInputPlugin(tLogSystem, tOrderInfo, tPluginCfg)
           if tPluginInstance==nil then
             tLogSystem.error(
               'Failed to instanciate input plugin #%d ("%s").',
@@ -1311,8 +1311,7 @@ function TestSystem:run()
       ['Inputs'] = '[' ..
                      '{"id": "fertigungsauftrag", "plugin": "fertigungsauftrag_input"},' ..
                      '{"id": "matrixlabel", "plugin": "matrixlabel_input"}' ..
-                   ']',
-      ['DataProvider'] = '[]'
+                   ']'
     }
     for strName, strValue in pairs(atConfigurationDefaults) do
       if atConfigurationLookup[strName]==nil then

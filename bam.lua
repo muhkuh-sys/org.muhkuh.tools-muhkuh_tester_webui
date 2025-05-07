@@ -46,7 +46,8 @@ local atArtifacts =
         },
         ['lua/webui/input'] = {
           'local/lua/webui/input/fertigungsauftrag_input.lua',
-          'local/lua/webui/input/matrixlabel_input.lua'
+          'local/lua/webui/input/matrixlabel_input.lua',
+          'local/lua/webui/input/regexp_input.lua'
         },
         ['jsx'] = {
           'local/jsx/connect_debugger.jsx',
