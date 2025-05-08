@@ -118,15 +118,25 @@ function _M:get_jsx()
           'const tData = arguments[2];\n' +
           'const fnTest = (strPrefix) => strLabel.toLowerCase().startsWith(strPrefix.toLowerCase());\n' +
           'const iIdx = tData.findIndex(fnTest);\n' +
-          'return iIdx!=-1;');
+          'const fIsValid = (iIdx!=-1);\n' +
+          'const strError = fIsValid ? "" : "The device is not supported by this production test.";\n' +
+          'return { valid: fIsValid, errormsg: strError };');
         atPredefinedValidators.set('ORDER-INFO',
           'const tLabelComponents = arguments[1];\n' +
           'const tOrderInfoData = arguments[2];\n' +
-          'return (\n' +
-          '  tLabelComponents.article==tOrderInfoData.article &&\n' +
-          '  tLabelComponents.hwrev==tOrderInfoData.hwrev &&\n' +
-          '  tOrderInfoData.serials.includes(tLabelComponents.serial)\n' +
-          ');');
+          'let fIsValid = true;\n' +
+          'let strError = "";\n' +
+          'if( tLabelComponents.article!=tOrderInfoData.article ) {\n' +
+          '  fIsValid = false;\n' +
+          '  strError = "The article is not supported by this production test.";\n' +
+          '} else if( tLabelComponents.hwrev!=tOrderInfoData.hwrev ) {\n' +
+          '  fIsValid = false;\n' +
+          '  strError = "The hardware revision is not supported by this production test.";\n' +
+          '} else if( tOrderInfoData.serials.includes(tLabelComponents.serial)!=true ) {\n' +
+          '  fIsValid = false;\n' +
+          '  strError = "The serial number is not part of the production order.";\n' +
+          '}\n' +
+          'return { valid: fIsValid, errormsg: strError };');
 
         let strFunctionLabelIsValid = '@LABEL_VALIDATION_FUNCTION@';
         if( atPredefinedValidators.has(strFunctionLabelIsValid)==true ) {
@@ -212,13 +222,15 @@ function _M:get_jsx()
               msg = 'The label validation data is not correct. This is a configuration problem of the teststation.';
             } else {
               try {
-                const fIsValid = fnValidation(strMatrixLabel, tLabelComponents, tLabelValidationData);
+                const tValidationResult = fnValidation(strMatrixLabel, tLabelComponents, tLabelValidationData);
+                const fIsValid = tValidationResult.valid;
+                const strValidationError = tValidationResult.errormsg;
                 if( fIsValid==true ) {
                   err = false;
                   msg = '';
                 } else {
                   err = true;
-                  msg = 'This device is not supported by the test.';
+                  msg = strValidationError;
                 }
               } catch (error) {
                 err = true;
