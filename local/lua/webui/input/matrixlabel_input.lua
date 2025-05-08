@@ -306,6 +306,7 @@ end
 
 _M.get_data_level = 11
 function _M:get_data()
+  return true
 end
 
 
