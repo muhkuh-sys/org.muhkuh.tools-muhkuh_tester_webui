@@ -70,6 +70,7 @@ function _M:_init(tLog, tOrderInfo, tPluginCfg)
 
   self.m_astrReplacements = astrReplacements
   self.get_jsx_level = uiLevel
+  self.get_data_level = uiLevel
 end
 
 
@@ -187,7 +188,6 @@ end
 
 
 
-_M.get_data_level = 10
 function _M:get_data()
   return true
 end
