@@ -1266,6 +1266,9 @@ function TestSystem:run()
 
   -- Read the order info.
   self:__readOrderInfo()
+  -- Set the order info.
+  _G.tester:setOrderInfo(self.m_tOrderInfo)
+
 
   -- Read the test.xml file.
   local tTestDescription = self.TestDescription(tLogSystem)
